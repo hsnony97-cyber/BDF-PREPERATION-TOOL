@@ -2294,10 +2294,10 @@ class BarPropertySolverTab:
         f1 = ttk.LabelFrame(main, text="1. Input Files", padding=10)
         f1.pack(fill=tk.X, pady=5, padx=10)
 
-        # Thermal BDF
+        # All BDF Files
         bdf_frame = ttk.Frame(f1)
         bdf_frame.pack(fill=tk.X, pady=2)
-        ttk.Label(bdf_frame, text="Thermal BDF:", width=18).pack(side=tk.LEFT, anchor=tk.N)
+        ttk.Label(bdf_frame, text="All BDF Files:", width=18).pack(side=tk.LEFT, anchor=tk.N)
 
         bdf_list_frame = ttk.Frame(bdf_frame)
         bdf_list_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -3340,7 +3340,7 @@ class BarPropertySolverTab:
     # ==================== MAIN SWEEP LOGIC ====================
     def start_sweep(self):
         if not self.bdf_paths:
-            messagebox.showerror("Error", "Add at least one Thermal BDF file")
+            messagebox.showerror("Error", "Add at least one BDF file")
             return
         if not self.bdf_model:
             self.load_bdf()
@@ -4042,10 +4042,10 @@ class StructureOptimizationTab:
         f1 = ttk.LabelFrame(main, text="1. Input Files", padding=10)
         f1.pack(fill=tk.X, pady=5, padx=10)
 
-        # Thermal BDF
+        # All BDF Files
         bdf_frame = ttk.Frame(f1)
         bdf_frame.pack(fill=tk.X, pady=2)
-        ttk.Label(bdf_frame, text="Thermal BDF:", width=18).pack(side=tk.LEFT, anchor=tk.N)
+        ttk.Label(bdf_frame, text="All BDF Files:", width=18).pack(side=tk.LEFT, anchor=tk.N)
 
         bdf_list_frame = ttk.Frame(bdf_frame)
         bdf_list_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -5038,7 +5038,7 @@ class StructureOptimizationTab:
     # ==================== OPTIMIZATION ====================
     def start_optimization(self):
         if not self.bdf_paths:
-            messagebox.showerror("Error", "Add at least one Thermal BDF file")
+            messagebox.showerror("Error", "Add at least one BDF file")
             return
         if not self.bdf_model:
             self.load_bdf()
