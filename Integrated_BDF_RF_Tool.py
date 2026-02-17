@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Integrated BDF Tool v13.0
+Integrated BDF Tool v14.0
 =========================
-Refactored BDF Tool - Tab 4 (RF Check) removed.
+Refactored BDF Tool - Tab 3 (Offset) merged into Tab 2, Tab 4 (RF Check) removed.
 
 Tab 1: BDF Merge Preparation
-Tab 2: BDF Post-Process
-Tab 3: BDF Offset Tool
+Tab 2: BDF Post-Process (with integrated offset calculation & application)
 """
 
 import tkinter as tk
@@ -26,7 +25,7 @@ import numpy as np
 class IntegratedBDFRFTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("Integrated BDF Tool v13.0")
+        self.root.title("Integrated BDF Tool v14.0")
         self.root.geometry("1100x950")
         
         # Tab 1 variables
@@ -52,15 +51,10 @@ class IntegratedBDFRFTool:
         self.skin_properties = {}
         self.residual_strength_df = None
         
-        # Tab 3 variables (Offset Tool)
-        self.offset_input_bdf = tk.StringVar()
+        # Tab 2 Offset variables (merged from Tab 3)
         self.offset_element_excel = tk.StringVar()
-        self.offset_csv_path = tk.StringVar()
-        self.offset_output_name = tk.StringVar(value="offset_applied.bdf")
         self.offset_csv_name = tk.StringVar(value="calculated_offsets.csv")
-        
 
-        
         self.setup_ui()
     
     def setup_ui(self):
@@ -74,10 +68,6 @@ class IntegratedBDFRFTool:
         self.tab2 = ttk.Frame(self.notebook)
         self.notebook.add(self.tab2, text="BDF Post-Process")
         self.setup_tab2()
-        
-        self.tab3 = ttk.Frame(self.notebook)
-        self.notebook.add(self.tab3, text="BDF Offset Tool")
-        self.setup_tab3()
     
     def setup_tab1(self):
         main = ttk.Frame(self.tab1, padding="10")
@@ -193,15 +183,27 @@ class IntegratedBDFRFTool:
         ttk.Label(of, text="CSV:").grid(row=1, column=0, sticky=tk.W)
         ttk.Entry(of, textvariable=self.csv_output_name, width=25).grid(row=1, column=1, sticky=tk.W, padx=5)
         
-        # === OFFSET CSV SECTION ===
-        off = ttk.LabelFrame(main, text="Apply Offsets (Optional)", padding="10")
+        # === OFFSET SECTION (merged from Tab 3) ===
+        off = ttk.LabelFrame(main, text="Offset Calculation & Application", padding="10")
         off.pack(fill=tk.X, pady=5)
-        ttk.Label(off, text="Offset CSV:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(off, textvariable=self.tab2_offset_csv, width=60).grid(row=0, column=1, padx=5)
-        ttk.Button(off, text="Browse", command=self.browse_tab2_offset_csv).grid(row=0, column=2, padx=5)
-        self.btn_apply_offset_tab2 = ttk.Button(off, text=">>> APPLY OFFSETS TO BDFs <<<", 
+
+        ttk.Label(off, text="Element Excel:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        ttk.Entry(off, textvariable=self.offset_element_excel, width=50).grid(row=0, column=1, padx=5)
+        ttk.Button(off, text="Browse", command=self.browse_offset_element_excel).grid(row=0, column=2, padx=5)
+        ttk.Label(off, text="Sheets: 'Landing_Offset' (Col A), 'Bar_Offset' (Col A)",
+                 font=('Helvetica', 8, 'italic')).grid(row=0, column=3, padx=5)
+
+        self.btn_calc_offset = ttk.Button(off, text=">>> CALCULATE OFFSETS <<<",
+                                          command=self.start_calculate_offsets)
+        self.btn_calc_offset.grid(row=1, column=0, columnspan=2, pady=5)
+
+        ttk.Label(off, text="Offset CSV:").grid(row=2, column=0, sticky=tk.W, padx=5)
+        ttk.Entry(off, textvariable=self.tab2_offset_csv, width=50).grid(row=2, column=1, padx=5)
+        ttk.Button(off, text="Browse", command=self.browse_tab2_offset_csv).grid(row=2, column=2, padx=5)
+
+        self.btn_apply_offset_tab2 = ttk.Button(off, text=">>> APPLY OFFSETS TO BDFs <<<",
                                                 command=self.start_apply_offsets_tab2)
-        self.btn_apply_offset_tab2.grid(row=1, column=0, columnspan=3, pady=10)
+        self.btn_apply_offset_tab2.grid(row=3, column=0, columnspan=2, pady=5)
         
         af = ttk.Frame(main)
         af.pack(fill=tk.X, pady=10)
@@ -2170,150 +2172,43 @@ class IntegratedBDFRFTool:
                                        self.btn_apply_offset_tab2.config(state=tk.NORMAL)])
 
 
-    def setup_tab3(self):
-        """Tab 3: BDF Offset Tool"""
-        main = ttk.Frame(self.tab3, padding="10")
-        main.pack(fill=tk.BOTH, expand=True)
-
-        ttk.Label(main, text="BDF Offset Tool v3.0", font=('Helvetica', 14, 'bold')).pack(pady=(0,10))
-
-        # === INPUT BDF ===
-        bf = ttk.LabelFrame(main, text="Input BDF File", padding="10")
-        bf.pack(fill=tk.X, pady=5)
-        ttk.Label(bf, text="BDF File:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(bf, textvariable=self.offset_input_bdf, width=60).grid(row=0, column=1, padx=5)
-        ttk.Button(bf, text="Browse", command=self.browse_offset_bdf).grid(row=0, column=2, padx=5)
-
-        # === ELEMENT IDS (EXCEL) ===
-        ef = ttk.LabelFrame(main, text="Element IDs (Excel)", padding="10")
-        ef.pack(fill=tk.X, pady=5)
-        ttk.Label(ef, text="Excel File:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Entry(ef, textvariable=self.offset_element_excel, width=60).grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(ef, text="Browse", command=self.browse_offset_excel).grid(row=0, column=2, padx=5, pady=5)
-
-        ttk.Label(ef, text="Sheets: 'Landing_Offset' (Column A), 'Bar_Offset' (Column A)", 
-                 font=('Helvetica', 9, 'italic')).grid(row=1, column=0, columnspan=3, pady=5)
-
-        # === STEP 1: CALCULATE OFFSETS ===
-        calc_frame = ttk.LabelFrame(main, text="Step 1: Calculate Offsets", padding="10")
-        calc_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Label(calc_frame, text="Output CSV:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(calc_frame, textvariable=self.offset_csv_name, width=40).grid(row=0, column=1, sticky=tk.W, padx=5)
-
-        self.btn_calc_offset = ttk.Button(calc_frame, text=">>> CALCULATE OFFSETS <<<", 
-                                          command=self.start_calculate_offsets)
-        self.btn_calc_offset.grid(row=1, column=0, columnspan=2, pady=10)
-
-        # === STEP 2: APPLY OFFSETS ===
-        apply_frame = ttk.LabelFrame(main, text="Step 2: Apply Offsets from CSV", padding="10")
-        apply_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Label(apply_frame, text="Offset CSV:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(apply_frame, textvariable=self.offset_csv_path, width=60).grid(row=0, column=1, padx=5)
-        ttk.Button(apply_frame, text="Browse", command=self.browse_offset_csv).grid(row=0, column=2, padx=5)
-
-        ttk.Label(apply_frame, text="Output BDF:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        ttk.Entry(apply_frame, textvariable=self.offset_output_name, width=40).grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
-
-        self.btn_apply_offset = ttk.Button(apply_frame, text=">>> APPLY OFFSETS <<<", 
-                                           command=self.start_apply_offsets)
-        self.btn_apply_offset.grid(row=2, column=0, columnspan=2, pady=10)
-
-        # === BUTTONS ===
-        btnf = ttk.Frame(main)
-        btnf.pack(fill=tk.X, pady=10)
-        ttk.Button(btnf, text="Clear Log", command=self.clear_log3).pack(side=tk.LEFT, padx=5)
-
-        self.progress3 = ttk.Progressbar(main, mode='indeterminate')
-        self.progress3.pack(fill=tk.X, pady=5)
-
-        # === LOG ===
-        lf = ttk.LabelFrame(main, text="Log / Status", padding="10")
-        lf.pack(fill=tk.BOTH, expand=True, pady=5)
-        self.log_text3 = scrolledtext.ScrolledText(lf, height=12, wrap=tk.WORD)
-        self.log_text3.pack(fill=tk.BOTH, expand=True)
-
-        # Initial instructions
-        self.log3("="*70)
-        self.log3("BDF Offset Tool v3.0 - PyNastran Method")
-        self.log3("="*70)
-        self.log3("\nWorkflow:")
-        self.log3("STEP 1: Calculate Offsets")
-        self.log3("  - Select input BDF")
-        self.log3("  - Select Excel with element IDs")
-        self.log3("  - Click 'CALCULATE OFFSETS' -> Saves CSV")
-        self.log3("")
-        self.log3("STEP 2: Apply Offsets")
-        self.log3("  - Select offset CSV from Step 1")
-        self.log3("  - Click 'APPLY OFFSETS' -> Generates modified BDF")
-        self.log3("")
-        self.log3("Offset Logic:")
-        self.log3("  Landing: zoffset = -thickness/2")
-        self.log3("  Bar: wa=wb = offset_vector")
-        self.log3("       magnitude = landing_t + bar_t/2")
-        self.log3("="*70 + "\n")
-
-    def browse_offset_bdf(self):
+    def browse_offset_element_excel(self):
         f = filedialog.askopenfilename(
-            title="Select BDF File",
-            filetypes=[("BDF Files", "*.bdf *.dat *.nas"), ("All Files", "*.*")]
-        )
-        if f:
-            self.offset_input_bdf.set(f)
-            self.log3(f"Selected BDF: {os.path.basename(f)}")
-
-    def browse_offset_excel(self):
-        f = filedialog.askopenfilename(
-            title="Select Excel File",
+            title="Select Element IDs Excel",
             filetypes=[("Excel Files", "*.xlsx *.xls"), ("All Files", "*.*")]
         )
         if f:
             self.offset_element_excel.set(f)
-            self.log3(f"Selected Excel: {os.path.basename(f)}")
-
-    def browse_offset_csv(self):
-        f = filedialog.askopenfilename(
-            title="Select Offset CSV File",
-            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
-        )
-        if f:
-            self.offset_csv_path.set(f)
-            self.log3(f"Selected CSV: {os.path.basename(f)}")
-
-    def log3(self, msg):
-        self.log_text3.insert(tk.END, msg + "\n")
-        self.log_text3.see(tk.END)
-        self.root.update_idletasks()
-
-    def clear_log3(self):
-        self.log_text3.delete(1.0, tk.END)
+            self.log2(f"Selected Element Excel: {os.path.basename(f)}")
 
     def start_calculate_offsets(self):
-        """Thread starter for offset calculation"""
-        if not self.offset_input_bdf.get():
-            messagebox.showerror("Error", "Please select BDF file")
+        """Thread starter for offset calculation (merged from Tab 3)"""
+        if not self.run_bdfs:
+            messagebox.showerror("Error", "Please add BDF files first")
             return
         if not self.offset_element_excel.get():
             messagebox.showerror("Error", "Please select Excel file with element IDs")
             return
+        if not self.run_output_folder.get():
+            messagebox.showerror("Error", "Please select output folder")
+            return
 
         self.btn_calc_offset.config(state=tk.DISABLED)
-        self.progress3.start()
+        self.progress2.start()
         threading.Thread(target=self.calculate_offsets, daemon=True).start()
 
     def calculate_offsets(self):
-        """Calculate offsets and save to CSV"""
+        """Calculate offsets using BDF files and save to CSV (merged from Tab 3)"""
         try:
-            self.log3("\n" + "="*70)
-            self.log3("STEP 1: CALCULATING OFFSETS")
-            self.log3("="*70)
+            self.log2("\n" + "="*70)
+            self.log2("CALCULATING OFFSETS (from BDF files)")
+            self.log2("="*70)
 
             # Read Excel for element IDs
-            self.log3("\nReading element IDs from Excel...")
+            self.log2("\nReading element IDs from Excel...")
             xl = pd.ExcelFile(self.offset_element_excel.get())
             sheets = xl.sheet_names
-            self.log3(f"Available sheets: {', '.join(sheets)}")
+            self.log2(f"Available sheets: {', '.join(sheets)}")
 
             landing_sheet = bar_sheet = None
             for s in sheets:
@@ -2327,39 +2222,37 @@ class IntegratedBDFRFTool:
             bar_elem_ids = []
 
             if landing_sheet:
-                self.log3(f"\nReading '{landing_sheet}'...")
+                self.log2(f"\nReading '{landing_sheet}'...")
                 df = pd.read_excel(xl, sheet_name=landing_sheet)
                 landing_elem_ids = df.iloc[:,0].dropna().astype(int).tolist()
-                self.log3(f"  Found {len(landing_elem_ids)} landing element IDs")
+                self.log2(f"  Found {len(landing_elem_ids)} landing element IDs")
 
             if bar_sheet:
-                self.log3(f"\nReading '{bar_sheet}'...")
+                self.log2(f"\nReading '{bar_sheet}'...")
                 df = pd.read_excel(xl, sheet_name=bar_sheet)
                 bar_elem_ids = df.iloc[:,0].dropna().astype(int).tolist()
-                self.log3(f"  Found {len(bar_elem_ids)} bar element IDs")
+                self.log2(f"  Found {len(bar_elem_ids)} bar element IDs")
 
-            # Read BDF with pyNastran
-            self.log3("\n" + "="*70)
-            self.log3("Reading BDF with pyNastran...")
+            # Read first BDF with pyNastran for element/property info
+            bdf_path = self.run_bdfs[0]
+            self.log2(f"\nReading BDF with pyNastran: {os.path.basename(bdf_path)}")
 
             bdf = BDF(debug=False)
-            bdf_path = self.offset_input_bdf.get()
             try:
                 bdf.read_bdf(bdf_path, validate=False, xref=False,
                             read_includes=True, encoding='latin-1')
             except Exception:
-                self.log3("  Standard read failed, retrying with punch=True...")
+                self.log2("  Standard read failed, retrying with punch=True...")
                 bdf = BDF(debug=False)
                 bdf.read_bdf(bdf_path, validate=False, xref=False,
                             read_includes=True, encoding='latin-1', punch=True)
 
-            self.log3(f"  Nodes: {len(bdf.nodes)}")
-            self.log3(f"  Elements: {len(bdf.elements)}")
-            self.log3(f"  Properties: {len(bdf.properties)}")
+            self.log2(f"  Nodes: {len(bdf.nodes)}")
+            self.log2(f"  Elements: {len(bdf.elements)}")
+            self.log2(f"  Properties: {len(bdf.properties)}")
 
             # Calculate Landing offsets
-            self.log3("\n" + "="*70)
-            self.log3("Calculating Landing Offsets...")
+            self.log2("\nCalculating Landing Offsets...")
 
             landing_results = []
             landing_thickness = {}
@@ -2372,9 +2265,9 @@ class IntegratedBDFRFTool:
                         prop = bdf.properties[elem.pid]
 
                         thickness = None
-                        if hasattr(prop, 't'):  # PSHELL
+                        if hasattr(prop, 't'):
                             thickness = prop.t
-                        elif hasattr(prop, 'total_thickness'):  # PCOMP
+                        elif hasattr(prop, 'total_thickness'):
                             thickness = prop.total_thickness()
 
                         if thickness:
@@ -2390,7 +2283,6 @@ class IntegratedBDFRFTool:
                                 'Zoffset': zoffset
                             })
 
-                            # Calculate normal for bar calculations
                             if elem.type in ['CQUAD4', 'CTRIA3', 'CQUAD8', 'CTRIA6']:
                                 node_ids = elem.node_ids[:4] if elem.type.startswith('CQUAD') else elem.node_ids[:3]
                                 nodes = [bdf.nodes[nid] for nid in node_ids if nid in bdf.nodes]
@@ -2408,11 +2300,10 @@ class IntegratedBDFRFTool:
                                     if normal_len > 1e-10:
                                         landing_normals[eid] = normal / normal_len
 
-            self.log3(f"  Calculated offsets for {len(landing_results)} landing elements")
+            self.log2(f"  Calculated offsets for {len(landing_results)} landing elements")
 
-            # Build node -> shell mapping for bar calculations
-            self.log3("\n" + "="*70)
-            self.log3("Building node-to-shell mapping...")
+            # Build node -> shell mapping
+            self.log2("Building node-to-shell mapping...")
 
             node_to_shells = {}
             for eid, elem in bdf.elements.items():
@@ -2422,14 +2313,12 @@ class IntegratedBDFRFTool:
                             node_to_shells[nid] = []
                         node_to_shells[nid].append(eid)
 
-            self.log3(f"  Mapped {len(node_to_shells)} nodes to shell elements")
+            self.log2(f"  Mapped {len(node_to_shells)} nodes to shell elements")
 
             # Calculate Bar offsets
-            self.log3("\n" + "="*70)
-            self.log3("Calculating Bar Offsets...")
+            self.log2("Calculating Bar Offsets...")
 
             bar_results = []
-            bar_thickness = {}
             bar_no_landing = 0
 
             for eid in bar_elem_ids:
@@ -2447,18 +2336,13 @@ class IntegratedBDFRFTool:
                                 thickness = np.sqrt(prop.A)
 
                         if thickness:
-                            bar_thickness[eid] = thickness
-
-                            # Get bar nodes
                             bar_nodes = elem.node_ids[:2]
 
-                            # Find connected landing elements
                             if bar_nodes[0] in node_to_shells and bar_nodes[1] in node_to_shells:
                                 shells_n1 = set(node_to_shells[bar_nodes[0]])
                                 shells_n2 = set(node_to_shells[bar_nodes[1]])
                                 connected_shells = shells_n1.intersection(shells_n2)
 
-                                # Find thickest landing
                                 max_landing_thick = 0
                                 landing_normal = None
                                 connected_landing_id = None
@@ -2473,9 +2357,7 @@ class IntegratedBDFRFTool:
                                                 landing_normal = landing_normals[shell_eid]
 
                                 if landing_normal is not None and max_landing_thick > 0:
-                                    # Calculate offset: landing_thickness + bar_thickness/2
                                     offset_magnitude = max_landing_thick + (thickness / 2.0)
-                                    # Negative direction (opposite to landing normal)
                                     offset_vector = -landing_normal * offset_magnitude
 
                                     bar_results.append({
@@ -2496,262 +2378,58 @@ class IntegratedBDFRFTool:
                             else:
                                 bar_no_landing += 1
 
-            self.log3(f"  Calculated offsets for {len(bar_results)} bar elements")
+            self.log2(f"  Calculated offsets for {len(bar_results)} bar elements")
             if bar_no_landing > 0:
-                self.log3(f"  Skipped {bar_no_landing} bars (no landing connection)")
+                self.log2(f"  Skipped {bar_no_landing} bars (no landing connection)")
 
             # Save to CSV
-            self.log3("\n" + "="*70)
-            self.log3("Saving results to CSV...")
-
-            output_dir = os.path.dirname(self.offset_input_bdf.get())
+            output_dir = self.run_output_folder.get()
+            os.makedirs(output_dir, exist_ok=True)
             csv_path = os.path.join(output_dir, self.offset_csv_name.get())
 
             with open(csv_path, 'w', newline='') as f:
                 writer = csv.writer(f)
 
-                # Write landing offsets
                 writer.writerow(['LANDING OFFSETS'])
-                writer.writerow(['Element_ID', 'Element_Type', 'Property_ID', 'Property_Type', 
+                writer.writerow(['Element_ID', 'Element_Type', 'Property_ID', 'Property_Type',
                                 'Thickness', 'Zoffset'])
                 for row in landing_results:
                     writer.writerow([row['Element_ID'], row['Element_Type'], row['Property_ID'],
                                    row['Property_Type'], row['Thickness'], row['Zoffset']])
 
-                writer.writerow([])  # Empty row
+                writer.writerow([])
 
-                # Write bar offsets
                 writer.writerow(['BAR OFFSETS'])
                 writer.writerow(['Element_ID', 'Element_Type', 'Property_ID', 'Property_Type',
                                 'Bar_Thickness', 'Connected_Landing_ID', 'Landing_Thickness',
                                 'Offset_Magnitude', 'Offset_X', 'Offset_Y', 'Offset_Z'])
                 for row in bar_results:
                     writer.writerow([row['Element_ID'], row['Element_Type'], row['Property_ID'],
-                                   row['Property_Type'], row['Bar_Thickness'], 
+                                   row['Property_Type'], row['Bar_Thickness'],
                                    row['Connected_Landing_ID'], row['Landing_Thickness'],
-                                   row['Offset_Magnitude'], row['Offset_X'], 
+                                   row['Offset_Magnitude'], row['Offset_X'],
                                    row['Offset_Y'], row['Offset_Z']])
 
-            self.log3(f"\nSaved: {csv_path}")
-            self.log3(f"File size: {os.path.getsize(csv_path) / 1024:.2f} KB")
+            self.log2(f"\nSaved: {csv_path}")
 
-            self.log3("\n" + "="*70)
-            self.log3("CALCULATION COMPLETED!")
-            self.log3("="*70)
-            self.log3(f"\nSummary:")
-            self.log3(f"  Landing elements: {len(landing_results)}")
-            self.log3(f"  Bar elements: {len(bar_results)}")
-            self.log3(f"  Output CSV: {os.path.basename(csv_path)}")
-            self.log3("="*70)
+            # Auto-set the offset CSV path for apply step
+            self.tab2_offset_csv.set(csv_path)
 
-            # Set CSV path for Step 2
-            self.offset_csv_path.set(csv_path)
+            self.log2(f"\nSummary:")
+            self.log2(f"  Landing elements: {len(landing_results)}")
+            self.log2(f"  Bar elements: {len(bar_results)}")
+            self.log2("="*70)
 
             self.root.after(0, lambda: messagebox.showinfo("Success",
                 f"Offsets calculated!\n\nLanding: {len(landing_results)}\nBar: {len(bar_results)}\n\nCSV: {self.offset_csv_name.get()}"))
 
         except Exception as e:
-            self.log3(f"\nERROR: {e}")
+            self.log2(f"\nERROR: {e}")
             import traceback
-            self.log3(traceback.format_exc())
+            self.log2(traceback.format_exc())
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
-            self.root.after(0, lambda: [self.progress3.stop(), self.btn_calc_offset.config(state=tk.NORMAL)])
-
-    def start_apply_offsets(self):
-        """Thread starter for offset application"""
-        if not self.offset_input_bdf.get():
-            messagebox.showerror("Error", "Please select BDF file")
-            return
-        if not self.offset_csv_path.get():
-            messagebox.showerror("Error", "Please select offset CSV file")
-            return
-
-        self.btn_apply_offset.config(state=tk.DISABLED)
-        self.progress3.start()
-        threading.Thread(target=self.apply_offsets, daemon=True).start()
-
-    def apply_offsets(self):
-        """Apply offsets from CSV to BDF - TEXT BASED (preserves INCLUDEs)"""
-        try:
-            self.log3("\n" + "="*70)
-            self.log3("STEP 2: APPLYING OFFSETS FROM CSV (Text-based)")
-            self.log3("="*70)
-
-            # Read CSV
-            self.log3("\nReading offset CSV...")
-
-            landing_offsets = {}  # {eid: zoffset}
-            bar_offsets = {}      # {eid: (offset_x, offset_y, offset_z)}
-
-            with open(self.offset_csv_path.get(), 'r') as f:
-                reader = csv.reader(f)
-                section = None
-
-                for row in reader:
-                    if not row or not row[0]:
-                        continue
-
-                    if 'LANDING OFFSETS' in row[0]:
-                        section = 'landing'
-                        next(reader)  # Skip header
-                        continue
-                    elif 'BAR OFFSETS' in row[0]:
-                        section = 'bar'
-                        next(reader)  # Skip header
-                        continue
-
-                    if section == 'landing':
-                        try:
-                            eid = int(row[0])
-                            zoffset = float(row[5])
-                            landing_offsets[eid] = zoffset
-                        except:
-                            pass
-                    elif section == 'bar':
-                        try:
-                            eid = int(row[0])
-                            offset_x = float(row[8])
-                            offset_y = float(row[9])
-                            offset_z = float(row[10])
-                            bar_offsets[eid] = (offset_x, offset_y, offset_z)
-                        except:
-                            pass
-
-            self.log3(f"  Loaded {len(landing_offsets)} landing offsets")
-            self.log3(f"  Loaded {len(bar_offsets)} bar offsets")
-
-            # Helper function to format field (8-char fixed width)
-            def fmt_field(value, width=8):
-                if isinstance(value, float):
-                    s = f"{value:.4f}"
-                    if len(s) > width:
-                        s = f"{value:.2E}"
-                    return s[:width].ljust(width)
-                return str(value)[:width].ljust(width)
-
-            # Read BDF as text
-            self.log3("\n" + "="*70)
-            self.log3("Reading BDF as text (preserves INCLUDEs)...")
-
-            bdf_path = self.offset_input_bdf.get()
-            with open(bdf_path, 'r', encoding='latin-1') as f:
-                lines = f.readlines()
-
-            self.log3(f"  Total lines: {len(lines)}")
-
-            # Apply offsets using text replacement
-            new_lines = []
-            i = 0
-            landing_modified = 0
-            bar_modified = 0
-
-            while i < len(lines):
-                line = lines[i]
-
-                # Check for CQUAD4 (landing/skin elements with zoffset)
-                if line.startswith('CQUAD4'):
-                    try:
-                        eid = int(line[8:16].strip())
-                        if eid in landing_offsets:
-                            zoff = landing_offsets[eid]
-                            if len(line) >= 64:
-                                new_line = line[:64] + fmt_field(zoff) + line[72:] if len(line) > 72 else line[:64] + fmt_field(zoff) + '\n'
-                                new_lines.append(new_line)
-                                landing_modified += 1
-                                i += 1
-                                continue
-                    except:
-                        pass
-                    new_lines.append(line)
-                    i += 1
-                    continue
-
-                # Check for CBAR elements
-                elif line.startswith('CBAR'):
-                    try:
-                        eid = int(line[8:16].strip())
-                        if eid in bar_offsets:
-                            offset_vec = bar_offsets[eid]
-
-                            # Check if next line is continuation
-                            if i + 1 < len(lines) and (lines[i+1].startswith('+') or lines[i+1].startswith('*') or lines[i+1].startswith(' ')):
-                                cont_line = lines[i+1]
-                                new_cont = cont_line[:24]
-                                new_cont += fmt_field(offset_vec[0])
-                                new_cont += fmt_field(offset_vec[1])
-                                new_cont += fmt_field(offset_vec[2])
-                                new_cont += fmt_field(offset_vec[0])
-                                new_cont += fmt_field(offset_vec[1])
-                                new_cont += fmt_field(offset_vec[2])
-                                new_cont += '\n'
-
-                                new_lines.append(line)
-                                new_lines.append(new_cont)
-                                bar_modified += 1
-                                i += 2
-                                continue
-                            else:
-                                new_lines.append(line.rstrip() + '+CB' + str(eid)[-4:] + '\n')
-                                cont_name = '+CB' + str(eid)[-4:]
-                                new_cont = cont_name.ljust(8)
-                                new_cont += '        '
-                                new_cont += '        '
-                                new_cont += fmt_field(offset_vec[0])
-                                new_cont += fmt_field(offset_vec[1])
-                                new_cont += fmt_field(offset_vec[2])
-                                new_cont += fmt_field(offset_vec[0])
-                                new_cont += fmt_field(offset_vec[1])
-                                new_cont += fmt_field(offset_vec[2])
-                                new_cont += '\n'
-                                new_lines.append(new_cont)
-                                bar_modified += 1
-                                i += 1
-                                continue
-                    except:
-                        pass
-                    new_lines.append(line)
-                    i += 1
-                    continue
-
-                else:
-                    new_lines.append(line)
-                    i += 1
-
-            self.log3(f"\n[1] Landing Offsets (ZOFFS): {landing_modified}")
-            self.log3(f"[2] Bar Offsets (WA/WB): {bar_modified}")
-
-            # Write output BDF
-            self.log3("\n[3] Writing output BDF...")
-            output_dir = os.path.dirname(bdf_path)
-            output_path = os.path.join(output_dir, self.offset_output_name.get())
-
-            with open(output_path, 'w', encoding='latin-1') as f:
-                f.writelines(new_lines)
-
-            self.log3(f"\nOutput: {output_path}")
-            self.log3(f"File size: {os.path.getsize(output_path) / (1024*1024):.2f} MB")
-
-            self.log3("\n" + "="*70)
-            self.log3("APPLICATION COMPLETED!")
-            self.log3("="*70)
-            self.log3(f"\nSummary:")
-            self.log3(f"  Landing elements (ZOFFS): {landing_modified}")
-            self.log3(f"  Bar elements (WA/WB): {bar_modified}")
-            self.log3(f"  Output: {os.path.basename(output_path)}")
-            self.log3("  * INCLUDEs preserved (text-based modification)")
-            self.log3("="*70)
-
-            self.root.after(0, lambda: messagebox.showinfo("Success",
-                f"Offsets applied!\n\nLanding (ZOFFS): {landing_modified}\nBar (WA/WB): {bar_modified}\n\nOutput: {self.offset_output_name.get()}\n\nINCLUDEs preserved!"))
-
-        except Exception as e:
-            self.log3(f"\nERROR: {e}")
-            import traceback
-            self.log3(traceback.format_exc())
-            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
-        finally:
-            self.root.after(0, lambda: [self.progress3.stop(), self.btn_apply_offset.config(state=tk.NORMAL)])
+            self.root.after(0, lambda: [self.progress2.stop(), self.btn_calc_offset.config(state=tk.NORMAL)])
 
 
     def start_full_run(self):
