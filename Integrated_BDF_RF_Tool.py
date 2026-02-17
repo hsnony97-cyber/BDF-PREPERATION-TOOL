@@ -3339,8 +3339,12 @@ class BarPropertySolverTab:
 
     # ==================== MAIN SWEEP LOGIC ====================
     def start_sweep(self):
+        if not self.bdf_paths:
+            messagebox.showerror("Error", "Add at least one Thermal BDF file")
+            return
         if not self.bdf_model:
-            messagebox.showerror("Error", "Load BDF first")
+            self.load_bdf()
+        if not self.bdf_model:
             return
         if not self.structure_groups:
             messagebox.showerror("Error", "Load Property Excel with structure groups first")
@@ -5033,8 +5037,12 @@ class StructureOptimizationTab:
 
     # ==================== OPTIMIZATION ====================
     def start_optimization(self):
+        if not self.bdf_paths:
+            messagebox.showerror("Error", "Add at least one Thermal BDF file")
+            return
         if not self.bdf_model:
-            messagebox.showerror("Error", "Load BDF first")
+            self.load_bdf()
+        if not self.bdf_model:
             return
         if not self.allowable_interp:
             messagebox.showerror("Error", "Load allowable data first")
