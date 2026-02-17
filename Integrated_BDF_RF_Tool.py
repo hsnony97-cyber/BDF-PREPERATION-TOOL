@@ -2249,10 +2249,9 @@ class BarPropertySolverTab:
         self.bar_properties = {}          # PID -> {'dim1': val, 'dim2': val}
         self.bar_structure_map = {}       # PID -> Structure Name
         self.structure_groups = {}        # Structure Name -> [PID list]
-        self.skin_properties = {}         # PID -> {'thickness': val}
         self.pbarl_dims = {}              # PID -> {'dim1': val, 'dim2': val} from BDF
         self.current_bar_thicknesses = {} # PID -> thickness
-        self.current_skin_thicknesses = {}# PID -> thickness
+        self.current_skin_thicknesses = {}# PID -> thickness (from BDF, for offsets only)
         self.original_bar_thicknesses = {} # PID -> original dim1 from BDF
         self.material_densities = {}      # MID -> density
         self.prop_to_material = {}        # PID -> MID
@@ -2581,6 +2580,16 @@ class BarPropertySolverTab:
                     self.original_bar_thicknesses[pid] = d['dim1']
                     self.log(f"    PID {pid}: dim1={d['dim1']}, dim2={d['dim2']}")
 
+            # Extract PSHELL thicknesses from BDF (for offset calculations only - not modified)
+            self.current_skin_thicknesses = {}
+            for pid, prop in self.bdf_model.properties.items():
+                if prop.type == 'PSHELL':
+                    t = prop.t if hasattr(prop, 't') and prop.t is not None else None
+                    if t is not None:
+                        self.current_skin_thicknesses[pid] = t
+            if self.current_skin_thicknesses:
+                self.log(f"  PSHELL thicknesses extracted: {len(self.current_skin_thicknesses)} properties (for offsets only)")
+
             self.log(f"  Shells: {shell_count}, Bars: {bar_count}")
             self.log(f"  Centroids calculated: {len(self.element_centroids)}")
             self.log(f"\n  Total BDF models loaded: {len(self.bdf_models)}")
@@ -2620,9 +2629,7 @@ class BarPropertySolverTab:
             self.bar_properties = {}
             self.bar_structure_map = {}
             self.structure_groups = {}
-            self.skin_properties = {}
             self.current_bar_thicknesses = {}
-            self.current_skin_thicknesses = {}
 
             for sheet in xl.sheet_names:
                 sl = sheet.lower().replace('_', '').replace(' ', '')
@@ -2686,24 +2693,13 @@ class BarPropertySolverTab:
                     self.log(f"  Properties with BDF original dim1: {bdf_count}/{len(self.bar_properties)}")
                     self.log(f"  NOTE: Only active group thicknesses will change during sweep.")
 
-                elif 'skin' in sl and 'prop' in sl:
-                    self.log(f"\n  Reading skin properties from '{sheet}'...")
-                    df = pd.read_excel(xl, sheet_name=sheet)
-                    for _, row in df.iterrows():
-                        pid = int(row.iloc[0]) if pd.notna(row.iloc[0]) else None
-                        if pid:
-                            skin_t = float(row.iloc[1]) if len(row) > 1 and pd.notna(row.iloc[1]) else 3.0
-                            self.skin_properties[pid] = {'thickness': skin_t}
-                            self.current_skin_thicknesses[pid] = skin_t
-                    self.log(f"  Loaded {len(self.skin_properties)} skin properties")
-
             # Update group display
             self._update_group_display()
 
             total = len(self.bar_properties)
             groups = len(self.structure_groups)
             self.prop_status.config(
-                text=f"Loaded: {total} bar props in {groups} groups, {len(self.skin_properties)} skin props",
+                text=f"Loaded: {total} bar props in {groups} groups",
                 foreground="green"
             )
 
@@ -2853,22 +2849,6 @@ class BarPropertySolverTab:
                             else:
                                 new_lines.append(cont)
                             i += 1
-                        continue
-                except:
-                    pass
-
-            elif line.startswith('PSHELL'):
-                try:
-                    pid = int(line[8:16].strip())
-                    if pid in self.current_skin_thicknesses:
-                        t = self.current_skin_thicknesses[pid]
-                        t = max(0.1, t)
-                        prefix = line[:16]
-                        mid1 = line[16:24]
-                        rest = line[32:] if len(line) > 32 else '\n'
-                        new_line = f"{prefix}{mid1}{t:8.4f}{rest}"
-                        new_lines.append(new_line)
-                        i += 1
                         continue
                 except:
                     pass
