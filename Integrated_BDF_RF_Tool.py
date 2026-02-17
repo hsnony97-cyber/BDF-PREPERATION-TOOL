@@ -2297,7 +2297,7 @@ class BarPropertySolverTab:
         # Multi-BDF selection
         bdf_frame = ttk.Frame(f1)
         bdf_frame.pack(fill=tk.X, pady=2)
-        ttk.Label(bdf_frame, text="BDF Files:", width=18).pack(side=tk.LEFT, anchor=tk.N)
+        ttk.Label(bdf_frame, text="Thermal BDF:", width=18).pack(side=tk.LEFT, anchor=tk.N)
 
         bdf_list_frame = ttk.Frame(bdf_frame)
         bdf_list_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -2874,19 +2874,20 @@ class BarPropertySolverTab:
         return output_bdf
 
     # ==================== OFFSET APPLICATION ====================
-    def _apply_offsets(self, bdf_path, folder):
+    def _apply_offsets(self, bdf_path, folder, maneuver_bdf_path=None):
         if not self.landing_elem_ids and not self.bar_offset_elem_ids:
             self.log("    No offset elements defined, skipping")
             return bdf_path
 
         try:
-            # Use MANEUVER BDF for offset geometry if available
-            if self.maneuver_bdfs:
-                geom_path = self.maneuver_bdfs[0]
-                self.log(f"    Loading MANEUVER BDF for offset geometry: {os.path.basename(geom_path)}")
+            # Use UPDATED maneuver BDF for offset geometry if provided
+            if maneuver_bdf_path:
+                geom_path = maneuver_bdf_path
+                self.log(f"    Using UPDATED maneuver BDF for offsets: {os.path.basename(geom_path)}")
             else:
                 geom_path = bdf_path
                 self.log(f"    Using working BDF for offset geometry")
+            self.log(f"    Applying offsets...")
             bdf = BDF(debug=False)
             bdf.read_bdf(geom_path, validate=False, xref=True, read_includes=True, encoding='latin-1')
 
@@ -3273,6 +3274,15 @@ class BarPropertySolverTab:
             n_bdfs = len(self.bdf_models) if self.bdf_models else 1
             all_stresses = []
 
+            # Step 0: Update maneuver BDF with current thicknesses for offset geometry
+            updated_maneuver = None
+            if self.maneuver_bdfs:
+                maneuver_folder = os.path.join(folder, "maneuver_updated")
+                os.makedirs(maneuver_folder, exist_ok=True)
+                updated_maneuver = self._write_bdf_for_model(
+                    maneuver_folder, None, self.maneuver_bdfs[0])
+                self.log(f"    Maneuver BDF updated: {os.path.basename(updated_maneuver)}")
+
             for bdf_idx, bdf_info in enumerate(self.bdf_models):
                 bdf_name = bdf_info['name']
                 bdf_subfolder = os.path.join(folder, f"bdf_{bdf_idx + 1}_{os.path.splitext(bdf_name)[0]}") if n_bdfs > 1 else folder
@@ -3281,11 +3291,11 @@ class BarPropertySolverTab:
                 if n_bdfs > 1:
                     self.log(f"    --- BDF {bdf_idx + 1}/{n_bdfs}: {bdf_name} ---")
 
-                # 1. Write BDF
+                # 1. Write thermal BDF with current thicknesses
                 bdf_path = self._write_bdf_for_model(bdf_subfolder, bdf_info['model'], bdf_info['path'])
 
-                # 2. Apply offsets
-                offset_bdf = self._apply_offsets(bdf_path, bdf_subfolder)
+                # 2. Apply offsets (from updated maneuver BDF)
+                offset_bdf = self._apply_offsets(bdf_path, bdf_subfolder, updated_maneuver)
 
                 # 3. Run Nastran
                 self.log("    Running Nastran...")
@@ -4022,7 +4032,7 @@ class StructureOptimizationTab:
         # Multi-BDF selection with Listbox
         bdf_frame = ttk.Frame(f1)
         bdf_frame.pack(fill=tk.X, pady=2)
-        ttk.Label(bdf_frame, text="BDF Files:", width=18).pack(side=tk.LEFT, anchor=tk.N)
+        ttk.Label(bdf_frame, text="Thermal BDF:", width=18).pack(side=tk.LEFT, anchor=tk.N)
 
         bdf_list_frame = ttk.Frame(bdf_frame)
         bdf_list_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -9085,6 +9095,15 @@ class StructureOptimizationTab:
             n_bdfs = len(self.bdf_models) if hasattr(self, 'bdf_models') and self.bdf_models else 1
             all_stresses = []
 
+            # Step 0: Update maneuver BDF with current thicknesses for offset geometry
+            updated_maneuver = None
+            if self.maneuver_bdfs:
+                maneuver_folder = os.path.join(folder, "maneuver_updated")
+                os.makedirs(maneuver_folder, exist_ok=True)
+                updated_maneuver = self._write_bdf_for_model(
+                    maneuver_folder, None, self.maneuver_bdfs[0])
+                self.log(f"  Maneuver BDF updated: {os.path.basename(updated_maneuver)}")
+
             if n_bdfs > 1:
                 self.log(f"  Processing {n_bdfs} BDF files...")
 
@@ -9096,13 +9115,13 @@ class StructureOptimizationTab:
                 if n_bdfs > 1:
                     self.log(f"\n  --- BDF {bdf_idx+1}/{n_bdfs}: {bdf_name} ---")
 
-                # 1. Write BDF
+                # 1. Write thermal BDF with current thicknesses
                 self.log("  [1] Writing BDF...")
                 bdf_path = self._write_bdf_for_model(bdf_subfolder, bdf_info['model'], bdf_info['path'])
 
-                # 2. Apply offsets
+                # 2. Apply offsets (from updated maneuver BDF)
                 self.log("  [2] Applying offsets...")
-                offset_bdf = self._apply_offsets(bdf_path, bdf_subfolder)
+                offset_bdf = self._apply_offsets(bdf_path, bdf_subfolder, updated_maneuver)
 
                 # 3. Run Nastran
                 self.log("  [3] Running Nastran...")
@@ -9308,20 +9327,21 @@ class StructureOptimizationTab:
         self.log(f"    BDF written: {os.path.basename(output_bdf)}")
         return output_bdf
 
-    def _apply_offsets(self, bdf_path, folder):
+    def _apply_offsets(self, bdf_path, folder, maneuver_bdf_path=None):
         """Apply landing zoffset and bar WA/WB offsets to BDF."""
         if not self.landing_elem_ids and not self.bar_offset_elem_ids:
             self.log("    No offset elements defined, skipping offset application")
             return bdf_path
 
         try:
-            # Use MANEUVER BDF for offset geometry if available
-            if self.maneuver_bdfs:
-                geom_path = self.maneuver_bdfs[0]
-                self.log(f"    Loading MANEUVER BDF for offset geometry: {os.path.basename(geom_path)}")
+            # Use UPDATED maneuver BDF for offset geometry if provided
+            if maneuver_bdf_path:
+                geom_path = maneuver_bdf_path
+                self.log(f"    Using UPDATED maneuver BDF for offsets: {os.path.basename(geom_path)}")
             else:
                 geom_path = bdf_path
                 self.log(f"    Using working BDF for offset geometry")
+            self.log(f"    Applying offsets...")
             bdf = BDF(debug=False)
             bdf.read_bdf(geom_path, validate=False, xref=True, read_includes=True, encoding='latin-1')
 
