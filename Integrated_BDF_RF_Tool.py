@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Integrated BDF Tool v14.0
+Integrated BDF Tool v15.0
 =========================
-Refactored BDF Tool - Tab 3 (Offset) merged into Tab 2, Tab 4 (RF Check) removed.
-
 Tab 1: BDF Merge Preparation
 Tab 2: BDF Post-Process (with integrated offset calculation & application)
+Tab 3: Understanding Structure Type (maneuver→thermal offset, 'Bar Property Structure Type' sheet)
 """
 
 import tkinter as tk
@@ -25,7 +24,7 @@ import numpy as np
 class IntegratedBDFRFTool:
     def __init__(self, root):
         self.root = root
-        self.root.title("Integrated BDF Tool v14.0")
+        self.root.title("Integrated BDF Tool v15.0")
         self.root.geometry("1100x950")
         
         # Tab 1 variables
@@ -53,6 +52,15 @@ class IntegratedBDFRFTool:
         # Offset variables
         self.offset_element_excel = tk.StringVar()
 
+        # Tab 3 variables
+        self.st_maneuver_bdfs = []
+        self.st_thermal_bdfs = []
+        self.st_property_excel = tk.StringVar()
+        self.st_element_excel = tk.StringVar()
+        self.st_output_folder = tk.StringVar()
+        self.st_bar_properties = {}
+        self.st_skin_properties = {}
+
         self.setup_ui()
     
     def setup_ui(self):
@@ -66,6 +74,10 @@ class IntegratedBDFRFTool:
         self.tab2 = ttk.Frame(self.notebook)
         self.notebook.add(self.tab2, text="BDF Post-Process")
         self.setup_tab2()
+
+        self.tab3 = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab3, text="Understanding Structure Type")
+        self.setup_tab3()
     
     def setup_tab1(self):
         main = ttk.Frame(self.tab1, padding="10")
@@ -213,6 +225,603 @@ class IntegratedBDFRFTool:
         lf.pack(fill=tk.BOTH, expand=True)
         self.log_text2 = scrolledtext.ScrolledText(lf, height=12)
         self.log_text2.pack(fill=tk.BOTH, expand=True)
+
+    def setup_tab3(self):
+        main = ttk.Frame(self.tab3, padding="10")
+        main.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(main, text="Understanding Structure Type", font=('Helvetica', 14, 'bold')).pack(pady=(0,10))
+
+        # === MANEUVER BDF (for offset calculation) ===
+        mf = ttk.LabelFrame(main, text="Maneuver BDF (Offset Calculation Source)", padding="5")
+        mf.pack(fill=tk.X, pady=3)
+        mb = ttk.Frame(mf)
+        mb.pack(fill=tk.X)
+        ttk.Button(mb, text="Add...", command=self.st_add_maneuver).pack(side=tk.LEFT, padx=5)
+        ttk.Button(mb, text="Clear", command=self.st_clear_maneuver).pack(side=tk.LEFT)
+        self.st_maneuver_listbox = tk.Listbox(mf, height=2, width=100)
+        self.st_maneuver_listbox.pack(fill=tk.X, pady=2)
+        self.st_maneuver_count = tk.StringVar(value="0 files")
+        ttk.Label(mf, textvariable=self.st_maneuver_count).pack(anchor=tk.W)
+
+        # === THERMAL BDF (to apply offsets) ===
+        tf = ttk.LabelFrame(main, text="Thermal BDF (Apply Offsets To)", padding="5")
+        tf.pack(fill=tk.X, pady=3)
+        tb = ttk.Frame(tf)
+        tb.pack(fill=tk.X)
+        ttk.Button(tb, text="Add...", command=self.st_add_thermal).pack(side=tk.LEFT, padx=5)
+        ttk.Button(tb, text="Clear", command=self.st_clear_thermal).pack(side=tk.LEFT)
+        self.st_thermal_listbox = tk.Listbox(tf, height=2, width=100)
+        self.st_thermal_listbox.pack(fill=tk.X, pady=2)
+        self.st_thermal_count = tk.StringVar(value="0 files")
+        ttk.Label(tf, textvariable=self.st_thermal_count).pack(anchor=tk.W)
+
+        # === Property Excel ===
+        pf = ttk.LabelFrame(main, text="Property Excel", padding="5")
+        pf.pack(fill=tk.X, pady=3)
+        pr = ttk.Frame(pf)
+        pr.pack(fill=tk.X)
+        ttk.Label(pr, text="Excel:").pack(side=tk.LEFT)
+        ttk.Entry(pr, textvariable=self.st_property_excel, width=60).pack(side=tk.LEFT, padx=5)
+        ttk.Button(pr, text="Browse", command=self.st_browse_property_excel).pack(side=tk.LEFT, padx=2)
+        ttk.Button(pr, text="Load Properties", command=self.st_load_properties).pack(side=tk.LEFT, padx=5)
+        pvf = ttk.Frame(pf)
+        pvf.pack(fill=tk.X, pady=3)
+        self.st_bar_prop_text = tk.Text(pvf, height=2, width=35)
+        self.st_bar_prop_text.pack(side=tk.LEFT, padx=3)
+        self.st_bar_prop_text.insert(tk.END, "Bar: Not loaded")
+        self.st_skin_prop_text = tk.Text(pvf, height=2, width=35)
+        self.st_skin_prop_text.pack(side=tk.LEFT, padx=3)
+        self.st_skin_prop_text.insert(tk.END, "Skin: Not loaded")
+
+        # === Element Excel (Offset IDs) ===
+        ef = ttk.LabelFrame(main, text="Element Excel (Offset IDs)", padding="5")
+        ef.pack(fill=tk.X, pady=3)
+        er = ttk.Frame(ef)
+        er.pack(fill=tk.X)
+        ttk.Label(er, text="Excel:").pack(side=tk.LEFT)
+        ttk.Entry(er, textvariable=self.st_element_excel, width=60).pack(side=tk.LEFT, padx=5)
+        ttk.Button(er, text="Browse", command=self.st_browse_element_excel).pack(side=tk.LEFT, padx=2)
+        ttk.Label(er, text="Sheets: 'Landing_Offset', 'Bar_Offset'",
+                 font=('Helvetica', 8, 'italic')).pack(side=tk.LEFT, padx=5)
+
+        # === Output ===
+        of = ttk.LabelFrame(main, text="Output", padding="5")
+        of.pack(fill=tk.X, pady=3)
+        orw = ttk.Frame(of)
+        orw.pack(fill=tk.X)
+        ttk.Label(orw, text="Folder:").pack(side=tk.LEFT)
+        ttk.Entry(orw, textvariable=self.st_output_folder, width=60).pack(side=tk.LEFT, padx=5)
+        ttk.Button(orw, text="Browse", command=self.st_browse_output).pack(side=tk.LEFT, padx=2)
+
+        # === Run Button ===
+        af = ttk.Frame(main)
+        af.pack(fill=tk.X, pady=8)
+        self.st_btn_run = ttk.Button(af, text="Update + Offset", command=self.st_start_run, width=18)
+        self.st_btn_run.pack(side=tk.LEFT, padx=5)
+        ttk.Button(af, text="Clear Log", command=self.st_clear_log).pack(side=tk.LEFT, padx=5)
+
+        self.st_progress = ttk.Progressbar(main, mode='indeterminate')
+        self.st_progress.pack(fill=tk.X, pady=3)
+
+        lf = ttk.LabelFrame(main, text="Log", padding="5")
+        lf.pack(fill=tk.BOTH, expand=True)
+        self.st_log_text = scrolledtext.ScrolledText(lf, height=10)
+        self.st_log_text.pack(fill=tk.BOTH, expand=True)
+
+    # ============= TAB 3 HELPERS =============
+    def st_add_maneuver(self):
+        files = filedialog.askopenfilenames(filetypes=[("BDF","*.bdf *.dat *.nas"),("All","*.*")])
+        for f in files:
+            if f not in self.st_maneuver_bdfs:
+                self.st_maneuver_bdfs.append(f)
+                self.st_maneuver_listbox.insert(tk.END, f)
+        self.st_maneuver_count.set(f"{len(self.st_maneuver_bdfs)} files")
+
+    def st_clear_maneuver(self):
+        self.st_maneuver_bdfs.clear()
+        self.st_maneuver_listbox.delete(0, tk.END)
+        self.st_maneuver_count.set("0 files")
+
+    def st_add_thermal(self):
+        files = filedialog.askopenfilenames(filetypes=[("BDF","*.bdf *.dat *.nas"),("All","*.*")])
+        for f in files:
+            if f not in self.st_thermal_bdfs:
+                self.st_thermal_bdfs.append(f)
+                self.st_thermal_listbox.insert(tk.END, f)
+        self.st_thermal_count.set(f"{len(self.st_thermal_bdfs)} files")
+
+    def st_clear_thermal(self):
+        self.st_thermal_bdfs.clear()
+        self.st_thermal_listbox.delete(0, tk.END)
+        self.st_thermal_count.set("0 files")
+
+    def st_browse_property_excel(self):
+        f = filedialog.askopenfilename(filetypes=[("Excel","*.xlsx *.xls")])
+        if f: self.st_property_excel.set(f)
+
+    def st_browse_element_excel(self):
+        f = filedialog.askopenfilename(filetypes=[("Excel","*.xlsx *.xls")])
+        if f: self.st_element_excel.set(f)
+
+    def st_browse_output(self):
+        f = filedialog.askdirectory()
+        if f: self.st_output_folder.set(f)
+
+    def st_log(self, msg):
+        self.st_log_text.insert(tk.END, msg + "\n")
+        self.st_log_text.see(tk.END)
+
+    def st_clear_log(self):
+        self.st_log_text.delete(1.0, tk.END)
+
+    def st_load_properties(self):
+        """Load properties - reads 'Bar Property Structure Type' instead of 'Bar Property'"""
+        if not self.st_property_excel.get():
+            messagebox.showerror("Error", "Select Excel"); return
+        try:
+            xl = pd.ExcelFile(self.st_property_excel.get())
+            sheets = xl.sheet_names
+            bar_sh = skin_sh = None
+
+            # Look for 'Bar Property Structure Type' sheet
+            for s in sheets:
+                sl = s.lower().replace('_', ' ').replace('-', ' ')
+                if 'bar' in sl and 'property' in sl and 'structure' in sl and 'type' in sl:
+                    bar_sh = s
+                elif sl == 'skin property' or sl == 'skinproperty':
+                    skin_sh = s
+
+            # Fallback partial match for skin
+            if not skin_sh:
+                for s in sheets:
+                    sl = s.lower().replace('_', ' ')
+                    if 'skin' in sl and 'prop' in sl:
+                        skin_sh = s
+
+            self.st_bar_properties.clear()
+            self.st_skin_properties.clear()
+
+            if bar_sh:
+                df = pd.read_excel(xl, sheet_name=bar_sh)
+                for _, row in df.iterrows():
+                    try:
+                        pid = int(row.iloc[0])
+                        d1 = float(row.iloc[1]) if len(df.columns) > 1 else 0
+                        d2 = float(row.iloc[2]) if len(df.columns) > 2 else 0
+                        self.st_bar_properties[pid] = {'dim1': d1, 'dim2': d2}
+                    except: pass
+
+            if skin_sh:
+                df = pd.read_excel(xl, sheet_name=skin_sh)
+                for _, row in df.iterrows():
+                    try:
+                        pid = int(row.iloc[0])
+                        t = float(row.iloc[1])
+                        self.st_skin_properties[pid] = {'thickness': t}
+                    except: pass
+
+            self.st_bar_prop_text.delete(1.0, tk.END)
+            self.st_bar_prop_text.insert(tk.END, f"Bar: {len(self.st_bar_properties)} loaded")
+            self.st_skin_prop_text.delete(1.0, tk.END)
+            self.st_skin_prop_text.insert(tk.END, f"Skin: {len(self.st_skin_properties)} loaded")
+
+            print(f"[ST Load] Bar sheet: {bar_sh}, Skin sheet: {skin_sh}")
+            print(f"[ST Load] Bar PIDs: {len(self.st_bar_properties)}, Skin PIDs: {len(self.st_skin_properties)}")
+            messagebox.showinfo("OK", f"Bar: {len(self.st_bar_properties)} Skin: {len(self.st_skin_properties)}\n\nSheets used:\nBar: {bar_sh}\nSkin: {skin_sh}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", str(e))
+
+    def st_start_run(self):
+        if not self.st_maneuver_bdfs:
+            messagebox.showerror("Error", "Add Maneuver BDF files"); return
+        if not self.st_thermal_bdfs:
+            messagebox.showerror("Error", "Add Thermal BDF files"); return
+        if not self.st_output_folder.get():
+            messagebox.showerror("Error", "Select output folder"); return
+        self.st_btn_run.config(state=tk.DISABLED)
+        self.st_progress.start()
+        threading.Thread(target=self.do_structure_type_run, daemon=True).start()
+
+    def st_update_properties_in_file(self, filepath):
+        """Same as update_properties_in_file but uses st_bar_properties / st_skin_properties"""
+        content = self.read_file(filepath)
+        lines = content.split('\n')
+        new_lines = []
+        i = 0
+        stats = {'pbarl': 0, 'pbar': 0, 'pshell': 0, 'pcomp': 0}
+        warnings = []
+        pshell_found = []
+        pcomp_found = []
+
+        while i < len(lines):
+            line = lines[i]
+            upper = line.upper().strip()
+
+            if upper.startswith('PBARL'):
+                try:
+                    if ',' in line:
+                        pid = int(float(line.split(',')[1].strip()))
+                    else:
+                        pid = int(float(line[8:16].strip()))
+                    if i+1 < len(lines) and pid in self.st_bar_properties:
+                        d1 = self.st_bar_properties[pid]['dim1']
+                        d2 = self.st_bar_properties[pid]['dim2']
+                        new_lines.append(line)
+                        next_line = lines[i+1]
+                        if ',' in next_line:
+                            parts = next_line.split(',')
+                            start_idx = 1 if parts[0].strip().startswith('+') else 0
+                            if len(parts) > start_idx: parts[start_idx] = f"{d1}."
+                            if len(parts) > start_idx + 1: parts[start_idx + 1] = f"{d2}."
+                            new_lines.append(','.join(parts))
+                        else:
+                            cont = next_line[:8]
+                            rest = next_line[24:] if len(next_line) > 24 else ""
+                            d1_str = f"{d1:<8.6g}".rstrip()
+                            if '.' not in d1_str and 'E' not in d1_str.upper(): d1_str += '.'
+                            d2_str = f"{d2:<8.6g}".rstrip()
+                            if '.' not in d2_str and 'E' not in d2_str.upper(): d2_str += '.'
+                            new_lines.append(f"{cont}{d1_str:>8}{d2_str:>8}{rest}")
+                        stats['pbarl'] += 1
+                        i += 2
+                        continue
+                except: pass
+                new_lines.append(line)
+                i += 1
+
+            elif upper.startswith('PBAR') and not upper.startswith('PBARL'):
+                try:
+                    if ',' in line:
+                        pid = int(float(line.split(',')[1].strip()))
+                    else:
+                        pid = int(float(line[8:16].strip()))
+                    if pid in self.st_bar_properties:
+                        d1 = self.st_bar_properties[pid]['dim1']
+                        d2 = self.st_bar_properties[pid]['dim2']
+                        area = d1 * d2
+                        if ',' in line:
+                            parts = line.split(',')
+                            parts[3] = str(area)
+                            new_lines.append(','.join(parts))
+                        else:
+                            new_lines.append(line[:24] + f"{area:8.4g}" + line[32:])
+                        stats['pbar'] += 1
+                        i += 1
+                        continue
+                except: pass
+                new_lines.append(line)
+                i += 1
+
+            elif upper.startswith('PSHELL'):
+                try:
+                    if ',' in line:
+                        pid = int(float(line.split(',')[1].strip()))
+                    else:
+                        pid = int(float(line[8:16].strip()))
+                    pshell_found.append(pid)
+                    if pid in self.st_skin_properties:
+                        t = self.st_skin_properties[pid]['thickness']
+                        if ',' in line:
+                            parts = line.split(',')
+                            parts[3] = str(t)
+                            new_lines.append(','.join(parts))
+                        else:
+                            t_str = f"{t:<8.6g}".rstrip()
+                            if '.' not in t_str and 'E' not in t_str.upper(): t_str += '.'
+                            new_lines.append(line[:24] + f"{t_str:>8}" + line[32:])
+                        stats['pshell'] += 1
+                        i += 1
+                        continue
+                except: pass
+                new_lines.append(line)
+                i += 1
+
+            elif upper.startswith('PCOMP'):
+                try:
+                    if ',' in line:
+                        pid = int(float(line.split(',')[1].strip()))
+                    else:
+                        pid = int(float(line[8:16].strip()))
+                    pcomp_found.append(pid)
+                    if pid in self.st_skin_properties:
+                        t = self.st_skin_properties[pid]['thickness']
+                        new_lines.append(line)
+                        ply_count, end_idx = self.count_pcomp_plies(lines, i)
+                        if ply_count > 0:
+                            t_per_ply = t / ply_count
+                            for pi in range(i+1, end_idx):
+                                ply_line = lines[pi]
+                                if ',' in ply_line:
+                                    parts = ply_line.split(',')
+                                    for ci in range(len(parts)):
+                                        try:
+                                            val = float(parts[ci].strip())
+                                            if val > 0 and val < 100:
+                                                parts[ci] = str(t_per_ply)
+                                                break
+                                        except: pass
+                                    new_lines.append(','.join(parts))
+                                else:
+                                    t_str = f"{t_per_ply:<8.6g}".rstrip()
+                                    if '.' not in t_str and 'E' not in t_str.upper(): t_str += '.'
+                                    new_lines.append(ply_line[:24] + f"{t_str:>8}" + ply_line[32:])
+                            stats['pcomp'] += 1
+                            i = end_idx
+                            continue
+                except: pass
+                new_lines.append(line)
+                i += 1
+            else:
+                new_lines.append(line)
+                i += 1
+
+        with open(filepath, 'w', encoding='latin-1') as f:
+            f.write('\n'.join(new_lines))
+        return stats, warnings
+
+    def do_structure_type_run(self):
+        """Tab 3: Update thermal BDF properties, calculate offsets from maneuver BDF, apply to thermal"""
+        try:
+            self.st_log("=" * 60)
+            self.st_log("UNDERSTANDING STRUCTURE TYPE: Update + Offset")
+            self.st_log("=" * 60)
+            out_folder = self.st_output_folder.get()
+            os.makedirs(out_folder, exist_ok=True)
+
+            # --- Step 1: Copy THERMAL BDFs to output and update properties ---
+            self.st_log("\n--- Copying Thermal BDFs & Updating Properties ---")
+            out_bdfs = []
+            if self.st_bar_properties or self.st_skin_properties:
+                self.st_log(f"  Bar properties: {len(self.st_bar_properties)}")
+                self.st_log(f"  Skin properties: {len(self.st_skin_properties)}")
+                for bdf_path in self.st_thermal_bdfs:
+                    self.st_log(f"\n  Processing: {os.path.basename(bdf_path)}")
+                    out_bdf = self.copy_bdf_to_output(bdf_path, out_folder)
+                    out_bdfs.append(out_bdf)
+                    self.st_log("    Copying & updating properties...")
+                    stats, warnings = self.st_update_properties_in_file(out_bdf)
+                    self.st_log(f"    Updated: PBARL={stats['pbarl']} PBAR={stats['pbar']} PSHELL={stats['pshell']} PCOMP={stats['pcomp']}")
+            else:
+                self.st_log("  No properties loaded - copying Thermal BDFs without update")
+                for bdf_path in self.st_thermal_bdfs:
+                    out_bdf = self.copy_bdf_to_output(bdf_path, out_folder)
+                    out_bdfs.append(out_bdf)
+                    self.st_log(f"  Copied: {os.path.basename(bdf_path)}")
+
+            # --- Step 2: Calculate offsets from MANEUVER BDF ---
+            if self.st_element_excel.get():
+                self.st_log("\n" + "=" * 60)
+                self.st_log("CALCULATING OFFSETS FROM MANEUVER BDF")
+                self.st_log("=" * 60)
+
+                # Read element IDs from Excel
+                self.st_log("\n  Reading element IDs from Excel...")
+                xl = pd.ExcelFile(self.st_element_excel.get())
+                sheets = xl.sheet_names
+
+                landing_sheet = bar_sheet = None
+                for s in sheets:
+                    s_lower = s.lower().replace('_', '').replace(' ', '')
+                    if 'landing' in s_lower and 'offset' in s_lower:
+                        landing_sheet = s
+                    elif 'bar' in s_lower and 'offset' in s_lower:
+                        bar_sheet = s
+
+                landing_elem_ids = []
+                bar_elem_ids = []
+
+                if landing_sheet:
+                    df = pd.read_excel(xl, sheet_name=landing_sheet)
+                    landing_elem_ids = df.iloc[:, 0].dropna().astype(int).tolist()
+                    self.st_log(f"  Landing elements: {len(landing_elem_ids)} (from '{landing_sheet}')")
+
+                if bar_sheet:
+                    df = pd.read_excel(xl, sheet_name=bar_sheet)
+                    bar_elem_ids = df.iloc[:, 0].dropna().astype(int).tolist()
+                    self.st_log(f"  Bar elements: {len(bar_elem_ids)} (from '{bar_sheet}')")
+
+                if not landing_elem_ids and not bar_elem_ids:
+                    self.st_log("  No element IDs found - skipping offsets")
+                else:
+                    # Read MANEUVER BDF with pyNastran for geometry info
+                    maneuver_path = self.st_maneuver_bdfs[0]
+                    self.st_log(f"\n  Reading MANEUVER BDF with pyNastran: {os.path.basename(maneuver_path)}")
+
+                    bdf_model = BDF(debug=False)
+                    try:
+                        bdf_model.read_bdf(maneuver_path, validate=False, xref=False,
+                                           read_includes=True, encoding='latin-1')
+                    except Exception:
+                        bdf_model = BDF(debug=False)
+                        bdf_model.read_bdf(maneuver_path, validate=False, xref=False,
+                                           read_includes=True, encoding='latin-1', punch=True)
+
+                    self.st_log(f"  Nodes: {len(bdf_model.nodes)}, Elements: {len(bdf_model.elements)}")
+
+                    # Calculate landing offsets
+                    landing_offsets = {}
+                    landing_thickness = {}
+                    landing_normals = {}
+
+                    for eid in landing_elem_ids:
+                        if eid in bdf_model.elements:
+                            elem = bdf_model.elements[eid]
+                            if hasattr(elem, 'pid') and elem.pid in bdf_model.properties:
+                                prop = bdf_model.properties[elem.pid]
+                                thickness = None
+                                if hasattr(prop, 't'):
+                                    thickness = prop.t
+                                elif hasattr(prop, 'total_thickness'):
+                                    thickness = prop.total_thickness()
+                                if thickness:
+                                    landing_offsets[eid] = -thickness / 2.0
+                                    landing_thickness[eid] = thickness
+
+                                    if elem.type in ['CQUAD4', 'CTRIA3', 'CQUAD8', 'CTRIA6']:
+                                        node_ids = elem.node_ids[:4] if elem.type.startswith('CQUAD') else elem.node_ids[:3]
+                                        nodes = [bdf_model.nodes[nid] for nid in node_ids if nid in bdf_model.nodes]
+                                        if len(nodes) >= 3:
+                                            p1 = np.array(nodes[0].xyz)
+                                            p2 = np.array(nodes[1].xyz)
+                                            p3 = np.array(nodes[2].xyz)
+                                            normal = np.cross(p2 - p1, p3 - p1)
+                                            normal_len = np.linalg.norm(normal)
+                                            if normal_len > 1e-10:
+                                                landing_normals[eid] = normal / normal_len
+
+                    self.st_log(f"  Landing offsets calculated: {len(landing_offsets)}")
+
+                    # Build node-to-shell mapping for bar calculations
+                    node_to_shells = {}
+                    for eid, elem in bdf_model.elements.items():
+                        if elem.type in ['CQUAD4', 'CTRIA3', 'CQUAD8', 'CTRIA6']:
+                            for nid in elem.node_ids:
+                                if nid not in node_to_shells:
+                                    node_to_shells[nid] = []
+                                node_to_shells[nid].append(eid)
+
+                    # Calculate bar offsets
+                    bar_offsets = {}
+                    bar_no_landing = 0
+
+                    for eid in bar_elem_ids:
+                        if eid in bdf_model.elements:
+                            elem = bdf_model.elements[eid]
+                            if elem.type == 'CBAR' and hasattr(elem, 'pid') and elem.pid in bdf_model.properties:
+                                prop = bdf_model.properties[elem.pid]
+                                thickness = None
+                                if prop.type == 'PBARL':
+                                    if hasattr(prop, 'dim') and len(prop.dim) > 0:
+                                        thickness = prop.dim[0]
+                                elif prop.type == 'PBAR':
+                                    if hasattr(prop, 'A') and prop.A > 0:
+                                        thickness = np.sqrt(prop.A)
+                                if thickness:
+                                    bar_nodes = elem.node_ids[:2]
+                                    if bar_nodes[0] in node_to_shells and bar_nodes[1] in node_to_shells:
+                                        connected = set(node_to_shells[bar_nodes[0]]).intersection(
+                                            set(node_to_shells[bar_nodes[1]]))
+                                        max_t = 0
+                                        best_normal = None
+                                        for shell_eid in connected:
+                                            if shell_eid in landing_thickness:
+                                                t = landing_thickness[shell_eid]
+                                                if t > max_t:
+                                                    max_t = t
+                                                    if shell_eid in landing_normals:
+                                                        best_normal = landing_normals[shell_eid]
+                                        if best_normal is not None and max_t > 0:
+                                            mag = max_t + thickness / 2.0
+                                            vec = -best_normal * mag
+                                            bar_offsets[eid] = (vec[0], vec[1], vec[2])
+                                        else:
+                                            bar_no_landing += 1
+                                    else:
+                                        bar_no_landing += 1
+
+                    self.st_log(f"  Bar offsets calculated: {len(bar_offsets)}")
+                    if bar_no_landing > 0:
+                        self.st_log(f"  Bars skipped (no landing): {bar_no_landing}")
+
+                    # --- Step 3: Apply offsets to THERMAL BDFs → _offseted.bdf ---
+                    self.st_log("\n--- Applying Offsets to Thermal BDFs ---")
+                    def fmt_field(value, width=8):
+                        if isinstance(value, float):
+                            s = f"{value:.4f}"
+                            if len(s) > width:
+                                s = f"{value:.2E}"
+                            return s[:width].ljust(width)
+                        return str(value)[:width].ljust(width)
+
+                    for out_bdf in out_bdfs:
+                        self.st_log(f"\n  Applying offsets to: {os.path.basename(out_bdf)}")
+                        with open(out_bdf, 'r', encoding='latin-1') as f:
+                            lines = f.readlines()
+
+                        new_lines = []
+                        i = 0
+                        landing_mod = 0
+                        bar_mod = 0
+
+                        while i < len(lines):
+                            line = lines[i]
+
+                            if line.startswith('CQUAD4'):
+                                try:
+                                    eid = int(line[8:16].strip())
+                                    if eid in landing_offsets:
+                                        zoff = landing_offsets[eid]
+                                        if len(line) >= 64:
+                                            new_line = line[:64] + fmt_field(zoff) + (line[72:] if len(line) > 72 else '\n')
+                                            new_lines.append(new_line)
+                                            landing_mod += 1
+                                            i += 1
+                                            continue
+                                except:
+                                    pass
+                                new_lines.append(line)
+                                i += 1
+
+                            elif line.startswith('CBAR'):
+                                try:
+                                    eid = int(line[8:16].strip())
+                                    if eid in bar_offsets:
+                                        vec = bar_offsets[eid]
+                                        if i + 1 < len(lines) and (lines[i+1].startswith('+') or lines[i+1].startswith('*') or lines[i+1].startswith(' ')):
+                                            cont_line = lines[i+1]
+                                            new_cont = cont_line[:24]
+                                            new_cont += fmt_field(vec[0]) + fmt_field(vec[1]) + fmt_field(vec[2])
+                                            new_cont += fmt_field(vec[0]) + fmt_field(vec[1]) + fmt_field(vec[2])
+                                            new_cont += '\n'
+                                            new_lines.append(line)
+                                            new_lines.append(new_cont)
+                                            bar_mod += 1
+                                            i += 2
+                                            continue
+                                        else:
+                                            cont_name = '+CB' + str(eid)[-4:]
+                                            new_lines.append(line.rstrip() + cont_name + '\n')
+                                            new_cont = cont_name.ljust(8) + '        ' + '        '
+                                            new_cont += fmt_field(vec[0]) + fmt_field(vec[1]) + fmt_field(vec[2])
+                                            new_cont += fmt_field(vec[0]) + fmt_field(vec[1]) + fmt_field(vec[2])
+                                            new_cont += '\n'
+                                            new_lines.append(new_cont)
+                                            bar_mod += 1
+                                            i += 1
+                                            continue
+                                except:
+                                    pass
+                                new_lines.append(line)
+                                i += 1
+
+                            else:
+                                new_lines.append(line)
+                                i += 1
+
+                        # Write to NEW file with _offseted suffix
+                        base, ext = os.path.splitext(out_bdf)
+                        offseted_bdf = base + "_offseted" + ext
+                        with open(offseted_bdf, 'w', encoding='latin-1') as f:
+                            f.writelines(new_lines)
+                        self.st_log(f"    Landing (ZOFFS): {landing_mod}, Bar (WA/WB): {bar_mod}")
+                        self.st_log(f"    Written: {os.path.basename(offseted_bdf)}")
+            else:
+                self.st_log("\n  No Element Excel selected - skipping offsets")
+
+            self.st_log("\n" + "=" * 60)
+            self.st_log("COMPLETED!")
+            self.st_log("=" * 60)
+            self.root.after(0, lambda: messagebox.showinfo("Done", "Structure Type Update + Offset completed!"))
+        except Exception as e:
+            self.st_log(f"ERROR: {e}")
+            import traceback
+            self.st_log(traceback.format_exc())
+            self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
+        finally:
+            self.root.after(0, lambda: [self.st_progress.stop(), self.st_btn_run.config(state=tk.NORMAL)])
 
     # ============= TAB 1 HELPERS =============
     def add_thermal_bdfs(self):
