@@ -1722,9 +1722,10 @@ class IntegratedBDFRFTool:
                 if not landing_elem_ids and not bar_elem_ids:
                     self.log2("  No element IDs found - skipping offsets")
                 else:
-                    # Read first BDF with pyNastran for geometry info
-                    bdf_path = self.run_bdfs[0]
-                    self.log2(f"\n  Reading BDF with pyNastran: {os.path.basename(bdf_path)}")
+                    # Read UPDATED BDF from output folder (not original) for correct thickness values
+                    updated_bdf_path = os.path.join(out_folder, os.path.basename(self.run_bdfs[0]))
+                    bdf_path = updated_bdf_path
+                    self.log2(f"\n  Reading UPDATED BDF with pyNastran: {os.path.basename(bdf_path)}")
 
                     bdf_model = BDF(debug=False)
                     try:
@@ -1899,9 +1900,13 @@ class IntegratedBDFRFTool:
                                 new_lines.append(line)
                                 i += 1
 
-                        with open(out_bdf, 'w', encoding='latin-1') as f:
+                        # Write to NEW file with _offseted suffix (keep updated BDF unchanged)
+                        base, ext = os.path.splitext(out_bdf)
+                        offseted_bdf = base + "_offseted" + ext
+                        with open(offseted_bdf, 'w', encoding='latin-1') as f:
                             f.writelines(new_lines)
                         self.log2(f"    Landing (ZOFFS): {landing_mod}, Bar (WA/WB): {bar_mod}")
+                        self.log2(f"    Written: {os.path.basename(offseted_bdf)}")
             else:
                 self.log2("\n  No Element Excel selected - skipping offsets")
 
