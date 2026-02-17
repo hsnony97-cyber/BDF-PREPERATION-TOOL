@@ -2294,7 +2294,7 @@ class BarPropertySolverTab:
         f1 = ttk.LabelFrame(main, text="1. Input Files", padding=10)
         f1.pack(fill=tk.X, pady=5, padx=10)
 
-        # Multi-BDF selection
+        # Thermal BDF
         bdf_frame = ttk.Frame(f1)
         bdf_frame.pack(fill=tk.X, pady=2)
         ttk.Label(bdf_frame, text="Thermal BDF:", width=18).pack(side=tk.LEFT, anchor=tk.N)
@@ -2316,17 +2316,26 @@ class BarPropertySolverTab:
         self.bdf_status = ttk.Label(f1, text="No BDF files loaded", foreground="gray")
         self.bdf_status.pack(anchor=tk.W)
 
-        # --- Maneuver BDF (for offset calculation) ---
-        mf = ttk.LabelFrame(f1, text="Maneuver BDF (Offset Source)", padding=5)
-        mf.pack(fill=tk.X, pady=3)
-        mb = ttk.Frame(mf)
-        mb.pack(fill=tk.X)
-        ttk.Button(mb, text="Add", command=self._add_maneuver_bdf, width=8).pack(side=tk.LEFT, padx=2)
-        ttk.Button(mb, text="Clear", command=self._clear_maneuver_bdf, width=8).pack(side=tk.LEFT, padx=2)
-        self.maneuver_listbox = tk.Listbox(mf, height=2, width=55)
-        self.maneuver_listbox.pack(fill=tk.X, pady=2)
-        self.maneuver_count_var = tk.StringVar(value="0 files")
-        ttk.Label(mf, textvariable=self.maneuver_count_var).pack(anchor=tk.W)
+        # Maneuver BDF (Offset Source)
+        man_frame = ttk.Frame(f1)
+        man_frame.pack(fill=tk.X, pady=2)
+        man_lbl = ttk.Frame(man_frame)
+        man_lbl.pack(side=tk.LEFT, anchor=tk.N)
+        ttk.Label(man_lbl, text="Maneuver BDF:", width=18).pack(anchor=tk.W)
+        ttk.Label(man_lbl, text="  (Offset Source)", foreground="blue").pack(anchor=tk.W)
+
+        man_list_frame = ttk.Frame(man_frame)
+        man_list_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.maneuver_listbox = tk.Listbox(man_list_frame, height=3, width=55, selectmode=tk.SINGLE)
+        self.maneuver_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        man_scroll = ttk.Scrollbar(man_list_frame, orient="vertical", command=self.maneuver_listbox.yview)
+        man_scroll.pack(side=tk.LEFT, fill=tk.Y)
+        self.maneuver_listbox.configure(yscrollcommand=man_scroll.set)
+
+        man_btn_frame = ttk.Frame(man_frame)
+        man_btn_frame.pack(side=tk.LEFT, padx=5)
+        ttk.Button(man_btn_frame, text="Add", command=self._add_maneuver_bdf).pack(fill=tk.X, pady=1)
+        ttk.Button(man_btn_frame, text="Remove", command=self._remove_maneuver_bdf).pack(fill=tk.X, pady=1)
 
 
         # Property Excel
@@ -2435,13 +2444,14 @@ class BarPropertySolverTab:
         for f in files:
             if f not in self.maneuver_bdfs:
                 self.maneuver_bdfs.append(f)
-                self.maneuver_listbox.insert(tk.END, f)
-        self.maneuver_count_var.set(f"{len(self.maneuver_bdfs)} files")
+                self.maneuver_listbox.insert(tk.END, os.path.basename(f))
 
-    def _clear_maneuver_bdf(self):
-        self.maneuver_bdfs.clear()
-        self.maneuver_listbox.delete(0, tk.END)
-        self.maneuver_count_var.set("0 files")
+    def _remove_maneuver_bdf(self):
+        sel = self.maneuver_listbox.curselection()
+        if sel:
+            idx = sel[0]
+            self.maneuver_listbox.delete(idx)
+            del self.maneuver_bdfs[idx]
 
     def add_bdf(self):
         paths = filedialog.askopenfilenames(filetypes=[("BDF", "*.bdf *.dat *.nas"), ("All", "*.*")])
@@ -4029,7 +4039,7 @@ class StructureOptimizationTab:
         f1 = ttk.LabelFrame(main, text="1. Input Files", padding=10)
         f1.pack(fill=tk.X, pady=5, padx=10)
 
-        # Multi-BDF selection with Listbox
+        # Thermal BDF
         bdf_frame = ttk.Frame(f1)
         bdf_frame.pack(fill=tk.X, pady=2)
         ttk.Label(bdf_frame, text="Thermal BDF:", width=18).pack(side=tk.LEFT, anchor=tk.N)
@@ -4053,17 +4063,26 @@ class StructureOptimizationTab:
         self.bdf_status = ttk.Label(f1, text="No BDF files loaded", foreground="gray")
         self.bdf_status.pack(anchor=tk.W)
 
-        # --- Maneuver BDF (for offset calculation) ---
-        mf = ttk.LabelFrame(f1, text="Maneuver BDF (Offset Source)", padding=5)
-        mf.pack(fill=tk.X, pady=3)
-        mb = ttk.Frame(mf)
-        mb.pack(fill=tk.X)
-        ttk.Button(mb, text="Add", command=self._add_maneuver_bdf, width=8).pack(side=tk.LEFT, padx=2)
-        ttk.Button(mb, text="Clear", command=self._clear_maneuver_bdf, width=8).pack(side=tk.LEFT, padx=2)
-        self.maneuver_listbox = tk.Listbox(mf, height=2, width=55)
-        self.maneuver_listbox.pack(fill=tk.X, pady=2)
-        self.maneuver_count_var = tk.StringVar(value="0 files")
-        ttk.Label(mf, textvariable=self.maneuver_count_var).pack(anchor=tk.W)
+        # Maneuver BDF (Offset Source)
+        man_frame = ttk.Frame(f1)
+        man_frame.pack(fill=tk.X, pady=2)
+        man_lbl = ttk.Frame(man_frame)
+        man_lbl.pack(side=tk.LEFT, anchor=tk.N)
+        ttk.Label(man_lbl, text="Maneuver BDF:", width=18).pack(anchor=tk.W)
+        ttk.Label(man_lbl, text="  (Offset Source)", foreground="blue").pack(anchor=tk.W)
+
+        man_list_frame = ttk.Frame(man_frame)
+        man_list_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.maneuver_listbox = tk.Listbox(man_list_frame, height=3, width=55, selectmode=tk.SINGLE)
+        self.maneuver_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        man_scroll = ttk.Scrollbar(man_list_frame, orient=tk.VERTICAL, command=self.maneuver_listbox.yview)
+        man_scroll.pack(side=tk.LEFT, fill=tk.Y)
+        self.maneuver_listbox.configure(yscrollcommand=man_scroll.set)
+
+        man_btn_frame = ttk.Frame(man_frame)
+        man_btn_frame.pack(side=tk.LEFT, padx=5)
+        ttk.Button(man_btn_frame, text="Add", command=self._add_maneuver_bdf, width=8).pack(pady=1)
+        ttk.Button(man_btn_frame, text="Remove", command=self._remove_maneuver_bdf, width=8).pack(pady=1)
 
 
         for label, var, cmd, status_name in [
@@ -4258,13 +4277,14 @@ class StructureOptimizationTab:
         for f in files:
             if f not in self.maneuver_bdfs:
                 self.maneuver_bdfs.append(f)
-                self.maneuver_listbox.insert(tk.END, f)
-        self.maneuver_count_var.set(f"{len(self.maneuver_bdfs)} files")
+                self.maneuver_listbox.insert(tk.END, os.path.basename(f))
 
-    def _clear_maneuver_bdf(self):
-        self.maneuver_bdfs.clear()
-        self.maneuver_listbox.delete(0, tk.END)
-        self.maneuver_count_var.set("0 files")
+    def _remove_maneuver_bdf(self):
+        sel = self.maneuver_listbox.curselection()
+        if sel:
+            idx = sel[0]
+            self.maneuver_listbox.delete(idx)
+            del self.maneuver_bdfs[idx]
 
     def add_bdf(self):
         """Add BDF file to the list."""
