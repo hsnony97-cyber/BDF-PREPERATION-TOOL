@@ -183,38 +183,37 @@ class IntegratedBDFRFTool:
         ttk.Label(of, text="CSV:").grid(row=1, column=0, sticky=tk.W)
         ttk.Entry(of, textvariable=self.csv_output_name, width=25).grid(row=1, column=1, sticky=tk.W, padx=5)
         
-        # === OFFSET SECTION (merged from Tab 3) ===
-        off = ttk.LabelFrame(main, text="Offset Calculation & Application", padding="10")
+        # === OFFSET SETTINGS ===
+        off = ttk.LabelFrame(main, text="Offset Settings", padding="10")
         off.pack(fill=tk.X, pady=5)
 
-        ttk.Label(off, text="Element Excel:").grid(row=0, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(off, textvariable=self.offset_element_excel, width=50).grid(row=0, column=1, padx=5)
-        ttk.Button(off, text="Browse", command=self.browse_offset_element_excel).grid(row=0, column=2, padx=5)
-        ttk.Label(off, text="Sheets: 'Landing_Offset' (Col A), 'Bar_Offset' (Col A)",
-                 font=('Helvetica', 8, 'italic')).grid(row=0, column=3, padx=5)
+        off_r1 = ttk.Frame(off)
+        off_r1.pack(fill=tk.X, pady=2)
+        ttk.Label(off_r1, text="Element Excel:").pack(side=tk.LEFT, padx=5)
+        ttk.Entry(off_r1, textvariable=self.offset_element_excel, width=50).pack(side=tk.LEFT, padx=5)
+        ttk.Button(off_r1, text="Browse", command=self.browse_offset_element_excel).pack(side=tk.LEFT, padx=5)
+        ttk.Label(off_r1, text="Sheets: 'Landing_Offset', 'Bar_Offset'",
+                 font=('Helvetica', 8, 'italic')).pack(side=tk.LEFT, padx=5)
 
-        self.btn_calc_offset = ttk.Button(off, text=">>> CALCULATE OFFSETS <<<",
-                                          command=self.start_calculate_offsets)
-        self.btn_calc_offset.grid(row=1, column=0, columnspan=2, pady=5)
+        off_r2 = ttk.Frame(off)
+        off_r2.pack(fill=tk.X, pady=2)
+        ttk.Label(off_r2, text="Offset CSV:").pack(side=tk.LEFT, padx=5)
+        ttk.Entry(off_r2, textvariable=self.tab2_offset_csv, width=50).pack(side=tk.LEFT, padx=5)
+        ttk.Button(off_r2, text="Browse", command=self.browse_tab2_offset_csv).pack(side=tk.LEFT, padx=5)
 
-        ttk.Label(off, text="Offset CSV:").grid(row=2, column=0, sticky=tk.W, padx=5)
-        ttk.Entry(off, textvariable=self.tab2_offset_csv, width=50).grid(row=2, column=1, padx=5)
-        ttk.Button(off, text="Browse", command=self.browse_tab2_offset_csv).grid(row=2, column=2, padx=5)
-
-        self.btn_apply_offset_tab2 = ttk.Button(off, text=">>> APPLY OFFSETS TO BDFs <<<",
-                                                command=self.start_apply_offsets_tab2)
-        self.btn_apply_offset_tab2.grid(row=3, column=0, columnspan=2, pady=5)
-        
+        # === 5 STEP BUTTONS + FULL ===
         af = ttk.Frame(main)
         af.pack(fill=tk.X, pady=10)
-        self.btn1 = ttk.Button(af, text="1.Update Props", command=self.start_update_properties, width=14)
+        self.btn1 = ttk.Button(af, text="1.Calc Offsets", command=self.start_calculate_offsets, width=14)
         self.btn1.pack(side=tk.LEFT, padx=2)
-        self.btn2 = ttk.Button(af, text="2.Run Nastran", command=self.start_run_nastran, width=14)
+        self.btn2 = ttk.Button(af, text="2.Apply Offsets", command=self.start_apply_offsets_tab2, width=14)
         self.btn2.pack(side=tk.LEFT, padx=2)
-        self.btn3 = ttk.Button(af, text="3.Post-Process", command=self.start_postprocess, width=14)
+        self.btn3 = ttk.Button(af, text="3.Update Props", command=self.start_update_properties, width=14)
         self.btn3.pack(side=tk.LEFT, padx=2)
-        self.btn4 = ttk.Button(af, text="4.Combine", command=self.start_combine_stress, width=12)
+        self.btn4 = ttk.Button(af, text="4.Run Nastran", command=self.start_run_nastran, width=14)
         self.btn4.pack(side=tk.LEFT, padx=2)
+        self.btn5 = ttk.Button(af, text="5.Post+Combine", command=self.start_postprocess_and_combine, width=14)
+        self.btn5.pack(side=tk.LEFT, padx=2)
         self.btn_full = ttk.Button(af, text=">>> FULL <<<", command=self.start_full_run, width=12)
         self.btn_full.pack(side=tk.LEFT, padx=2)
         ttk.Button(af, text="Clear", command=self.clear_log2).pack(side=tk.LEFT, padx=2)
@@ -1666,7 +1665,7 @@ class IntegratedBDFRFTool:
             messagebox.showerror("Error","Load properties first"); return
         if not self.run_output_folder.get():
             messagebox.showerror("Error","Select output folder"); return
-        self.btn1.config(state=tk.DISABLED)
+        self.btn3.config(state=tk.DISABLED)
         self.progress2.start()
         threading.Thread(target=self.do_update_properties, daemon=True).start()
     
@@ -1704,14 +1703,14 @@ class IntegratedBDFRFTool:
             self.log2(traceback.format_exc())
             self.root.after(0, lambda: messagebox.showerror("Error",str(e)))
         finally:
-            self.root.after(0, lambda: [self.progress2.stop(), self.btn1.config(state=tk.NORMAL)])
+            self.root.after(0, lambda: [self.progress2.stop(), self.btn3.config(state=tk.NORMAL)])
     
     def start_run_nastran(self):
         if not self.nastran_path.get():
             messagebox.showerror("Error","Select Nastran path"); return
         if not self.run_output_folder.get():
             messagebox.showerror("Error","Select output folder"); return
-        self.btn2.config(state=tk.DISABLED)
+        self.btn4.config(state=tk.DISABLED)
         self.progress2.start()
         threading.Thread(target=self.do_run_nastran, daemon=True).start()
     
@@ -1732,217 +1731,190 @@ class IntegratedBDFRFTool:
         except Exception as e:
             self.log2(f"ERROR: {e}")
         finally:
-            self.root.after(0, lambda: [self.progress2.stop(), self.btn2.config(state=tk.NORMAL)])
+            self.root.after(0, lambda: [self.progress2.stop(), self.btn4.config(state=tk.NORMAL)])
     
-    def start_postprocess(self):
+    def start_postprocess_and_combine(self):
         if not self.run_output_folder.get():
             messagebox.showerror("Error","Select output folder"); return
-        self.btn3.config(state=tk.DISABLED)
+        self.btn5.config(state=tk.DISABLED)
         self.progress2.start()
-        threading.Thread(target=self.do_postprocess, daemon=True).start()
-    
-    def do_postprocess(self):
+        threading.Thread(target=self.do_postprocess_and_combine, daemon=True).start()
+
+    def do_postprocess_and_combine(self):
+        """Run post-process and combine stress in one step"""
         try:
+            self.do_postprocess_inner()
+            if self.residual_strength_df is not None:
+                self.do_combine_stress_inner()
+            else:
+                self.log2("\n  Combine SKIPPED (No Residual Strength data loaded)")
+            self.log2("\n" + "="*60)
+            self.log2("POST-PROCESS + COMBINE COMPLETED!")
             self.log2("="*60)
-            self.log2("STEP 3: Post-Process OP2")
-            self.log2("="*60)
-            out_folder = self.run_output_folder.get()
-            op2_files = [os.path.join(out_folder, f) for f in os.listdir(out_folder) if f.lower().endswith('.op2')]
-            if not op2_files:
-                self.log2("No OP2 files found!")
-                return
-            
-            # Element -> Property mapping ve PBARL dimensions
-            elem_prop = {}
-            pbarl_dims = {}  # {pid: {'dim1': x, 'dim2': y, 'type': 'ROD'/'BAR'}}
-            
-            # BDF'lerden oku
-            bdf_files_to_read = list(self.run_bdfs)
-            # Output folder'daki BDF'leri de ekle
-            for f in os.listdir(out_folder):
-                if f.lower().endswith(('.bdf', '.dat', '.nas')):
-                    bdf_files_to_read.append(os.path.join(out_folder, f))
-            
-            for bdf_path in bdf_files_to_read:
-                try:
-                    self.log2(f"  Reading BDF: {os.path.basename(bdf_path)}")
-                    bdf = BDF(debug=False)
-                    bdf.read_bdf(bdf_path, validate=False, xref=False, read_includes=True)
-                    
-                    # Element -> Property mapping
-                    for eid, el in bdf.elements.items():
-                        if hasattr(el, 'pid'):
-                            elem_prop[eid] = el.pid
-                    
-                    # PBARL dimensions
-                    for pid, prop in bdf.properties.items():
-                        prop_type = prop.type
-                        if prop_type == 'PBARL':
-                            # PBARL formatı: dim listesi var
-                            dims = prop.dim if hasattr(prop, 'dim') else []
-                            bar_type = prop.bar_type if hasattr(prop, 'bar_type') else 'UNKNOWN'
-                            
-                            if len(dims) >= 2:
-                                pbarl_dims[pid] = {
-                                    'dim1': dims[0],
-                                    'dim2': dims[1],
-                                    'type': bar_type
-                                }
-                            elif len(dims) == 1:
-                                # ROD gibi tek dimension
-                                pbarl_dims[pid] = {
-                                    'dim1': dims[0],
-                                    'dim2': dims[0],
-                                    'type': bar_type
-                                }
-                        elif prop_type == 'PBAR':
-                            # PBAR: A (area) var
-                            area = prop.A if hasattr(prop, 'A') else None
-                            if area:
-                                # Area'dan approximate dims (kare varsayımı)
-                                import math
-                                side = math.sqrt(area) if area > 0 else 0
-                                pbarl_dims[pid] = {
-                                    'dim1': side,
-                                    'dim2': side,
-                                    'type': 'PBAR',
-                                    'area': area
-                                }
-                    
-                    self.log2(f"    Elements: {len(elem_prop)}, PBARL/PBAR props: {len(pbarl_dims)}")
-                except Exception as e:
-                    self.log2(f"    Warning reading BDF: {e}")
-            
-            self.log2(f"\n  Total: {len(elem_prop)} elements, {len(pbarl_dims)} bar properties from BDF")
-            
-            results = []
-            for op2_path in op2_files:
-                self.log2(f"\n  Processing: {os.path.basename(op2_path)}")
-                try:
-                    op2 = OP2(debug=False)
-                    op2.read_op2(op2_path)
-                    if hasattr(op2, 'cbar_force') and op2.cbar_force:
-                        for sc_id, force in op2.cbar_force.items():
-                            for i, eid in enumerate(force.element):
-                                axial = force.data[0,i,6] if len(force.data.shape)==3 else force.data[i,6]
-                                pid = elem_prop.get(eid)
-                                d1 = d2 = area = stress = None
-                                
-                                # Önce Excel'den yüklenen properties'e bak
-                                if pid and pid in self.bar_properties:
-                                    d1 = self.bar_properties[pid]['dim1']
-                                    d2 = self.bar_properties[pid]['dim2']
-                                    area = d1 * d2
-                                    if area > 0: stress = axial / area
-                                # Excel'de yoksa BDF'den okunan PBARL'a bak
-                                elif pid and pid in pbarl_dims:
-                                    prop_info = pbarl_dims[pid]
-                                    d1 = prop_info['dim1']
-                                    d2 = prop_info['dim2']
-                                    if 'area' in prop_info:
-                                        area = prop_info['area']
-                                    else:
-                                        area = d1 * d2
-                                    if area > 0: stress = axial / area
-                                
-                                results.append({'OP2': os.path.basename(op2_path), 'Subcase': sc_id, 'Element': eid,
-                                    'Property': pid, 'Axial': axial, 'Dim1': d1, 'Dim2': d2, 'Area': area, 'Stress': stress})
-                except Exception as e:
-                    self.log2(f"    ERROR: {e}")
-            
-            csv_path = os.path.join(out_folder, self.csv_output_name.get())
-            with open(csv_path, 'w', newline='') as f:
-                w = csv.DictWriter(f, fieldnames=['OP2','Subcase','Element','Property','Axial','Dim1','Dim2','Area','Stress'])
-                w.writeheader()
-                w.writerows(results)
-            self.log2(f"\n  Saved: {csv_path} ({len(results)} rows)")
-            self.root.after(0, lambda: messagebox.showinfo("Done","Results saved"))
+            self.root.after(0, lambda: messagebox.showinfo("Done", "Post-process + Combine completed!"))
         except Exception as e:
             self.log2(f"ERROR: {e}")
             import traceback
             self.log2(traceback.format_exc())
         finally:
-            self.root.after(0, lambda: [self.progress2.stop(), self.btn3.config(state=tk.NORMAL)])
-    
-    def start_combine_stress(self):
-        if not self.run_output_folder.get():
-            messagebox.showerror("Error","Select output folder"); return
-        if self.residual_strength_df is None:
-            messagebox.showerror("Error","Load Residual Strength data"); return
-        self.btn4.config(state=tk.DISABLED)
-        self.progress2.start()
-        threading.Thread(target=self.do_combine_stress, daemon=True).start()
-    
-    def do_combine_stress(self):
-        try:
-            self.log2("="*60)
-            self.log2("STEP 4: Combine Stress")
-            self.log2("="*60)
-            out_folder = self.run_output_folder.get()
-            stress_csv = os.path.join(out_folder, self.csv_output_name.get())
-            if not os.path.exists(stress_csv):
-                self.log2("Stress CSV not found")
-                return
-            
-            stress_df = pd.read_csv(stress_csv)
-            lookup = {}
-            for _, row in stress_df.iterrows():
-                key = (int(row['Subcase']), int(row['Element']))
-                lookup[key] = row['Stress'] if pd.notna(row['Stress']) else 0
-            elements = stress_df['Element'].unique()
-            
-            rs_df = self.residual_strength_df
-            cols = rs_df.columns.tolist()
-            comb_col = cols[0]
-            
-            comp_cols = []
-            i = 1
-            while i < len(cols) - 1:
-                col_name = str(cols[i]).upper()
-                next_col_name = str(cols[i+1]).upper()
-                if ('CASE' in col_name or 'ID' in col_name) and 'MULT' in next_col_name:
-                    comp_cols.append((cols[i], cols[i+1]))
-                    i += 2
-                else:
-                    i += 1
-            
-            results = []
-            for _, rs_row in rs_df.iterrows():
-                comb_lc = rs_row[comb_col]
-                if pd.isna(comb_lc): continue
-                comb_lc = int(comb_lc)
-                
-                for eid in elements:
-                    total_stress = 0.0
-                    components = []
-                    for case_col, mult_col in comp_cols:
-                        case_id = rs_row[case_col]
-                        multiplier = rs_row[mult_col]
-                        if pd.isna(case_id) or pd.isna(multiplier): continue
-                        case_id = int(case_id)
-                        multiplier = float(multiplier)
-                        key = (case_id, int(eid))
-                        if key in lookup:
-                            stress = lookup[key]
-                            if stress is not None:
-                                total_stress += stress * multiplier
-                                components.append(f"{case_id}*{multiplier}")
-                    if components:
-                        results.append({'Combined_LC': comb_lc, 'Element': eid, 
-                            'Combined_Stress': total_stress, 'Components': ' + '.join(components)})
-            
-            comb_csv = os.path.join(out_folder, self.combined_csv_name.get())
-            with open(comb_csv, 'w', newline='') as f:
-                w = csv.DictWriter(f, fieldnames=['Combined_LC','Element','Combined_Stress','Components'])
-                w.writeheader()
-                w.writerows(results)
-            self.log2(f"\n  Saved: {comb_csv}")
-            self.root.after(0, lambda: messagebox.showinfo("Done","Combined stress saved"))
-        except Exception as e:
-            self.log2(f"ERROR: {e}")
-        finally:
-            self.root.after(0, lambda: [self.progress2.stop(), self.btn4.config(state=tk.NORMAL)])
-    
+            self.root.after(0, lambda: [self.progress2.stop(), self.btn5.config(state=tk.NORMAL)])
+
+    def do_postprocess_inner(self):
+        """Post-process OP2 files (shared logic for step 5 and full run)"""
+        self.log2("="*60)
+        self.log2("STEP 5a: Post-Process OP2")
+        self.log2("="*60)
+        out_folder = self.run_output_folder.get()
+        op2_files = [os.path.join(out_folder, f) for f in os.listdir(out_folder) if f.lower().endswith('.op2')]
+        if not op2_files:
+            self.log2("No OP2 files found!")
+            return
+
+        elem_prop = {}
+        pbarl_dims = {}
+
+        bdf_files_to_read = list(self.run_bdfs)
+        for f in os.listdir(out_folder):
+            if f.lower().endswith(('.bdf', '.dat', '.nas')):
+                bdf_files_to_read.append(os.path.join(out_folder, f))
+
+        for bdf_path in bdf_files_to_read:
+            try:
+                self.log2(f"  Reading BDF: {os.path.basename(bdf_path)}")
+                bdf = BDF(debug=False)
+                bdf.read_bdf(bdf_path, validate=False, xref=False, read_includes=True)
+
+                for eid, el in bdf.elements.items():
+                    if hasattr(el, 'pid'):
+                        elem_prop[eid] = el.pid
+
+                for pid, prop in bdf.properties.items():
+                    prop_type = prop.type
+                    if prop_type == 'PBARL':
+                        dims = prop.dim if hasattr(prop, 'dim') else []
+                        bar_type = prop.bar_type if hasattr(prop, 'bar_type') else 'UNKNOWN'
+                        if len(dims) >= 2:
+                            pbarl_dims[pid] = {'dim1': dims[0], 'dim2': dims[1], 'type': bar_type}
+                        elif len(dims) == 1:
+                            pbarl_dims[pid] = {'dim1': dims[0], 'dim2': dims[0], 'type': bar_type}
+                    elif prop_type == 'PBAR':
+                        area = prop.A if hasattr(prop, 'A') else None
+                        if area:
+                            import math
+                            side = math.sqrt(area) if area > 0 else 0
+                            pbarl_dims[pid] = {'dim1': side, 'dim2': side, 'type': 'PBAR', 'area': area}
+
+                self.log2(f"    Elements: {len(elem_prop)}, PBARL/PBAR props: {len(pbarl_dims)}")
+            except Exception as e:
+                self.log2(f"    Warning reading BDF: {e}")
+
+        self.log2(f"\n  Total: {len(elem_prop)} elements, {len(pbarl_dims)} bar properties from BDF")
+
+        results = []
+        for op2_path in op2_files:
+            self.log2(f"\n  Processing: {os.path.basename(op2_path)}")
+            try:
+                op2 = OP2(debug=False)
+                op2.read_op2(op2_path)
+                if hasattr(op2, 'cbar_force') and op2.cbar_force:
+                    for sc_id, force in op2.cbar_force.items():
+                        for i, eid in enumerate(force.element):
+                            axial = force.data[0,i,6] if len(force.data.shape)==3 else force.data[i,6]
+                            pid = elem_prop.get(eid)
+                            d1 = d2 = area = stress = None
+
+                            if pid and pid in self.bar_properties:
+                                d1 = self.bar_properties[pid]['dim1']
+                                d2 = self.bar_properties[pid]['dim2']
+                                area = d1 * d2
+                                if area > 0: stress = axial / area
+                            elif pid and pid in pbarl_dims:
+                                prop_info = pbarl_dims[pid]
+                                d1 = prop_info['dim1']
+                                d2 = prop_info['dim2']
+                                if 'area' in prop_info:
+                                    area = prop_info['area']
+                                else:
+                                    area = d1 * d2
+                                if area > 0: stress = axial / area
+
+                            results.append({'OP2': os.path.basename(op2_path), 'Subcase': sc_id, 'Element': eid,
+                                'Property': pid, 'Axial': axial, 'Dim1': d1, 'Dim2': d2, 'Area': area, 'Stress': stress})
+            except Exception as e:
+                self.log2(f"    ERROR: {e}")
+
+        csv_path = os.path.join(out_folder, self.csv_output_name.get())
+        with open(csv_path, 'w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=['OP2','Subcase','Element','Property','Axial','Dim1','Dim2','Area','Stress'])
+            w.writeheader()
+            w.writerows(results)
+        self.log2(f"\n  Saved: {csv_path} ({len(results)} rows)")
+
+    def do_combine_stress_inner(self):
+        """Combine stress using residual strength (shared logic for step 5 and full run)"""
+        self.log2("\n" + "="*60)
+        self.log2("STEP 5b: Combine Stress")
+        self.log2("="*60)
+        out_folder = self.run_output_folder.get()
+        stress_csv = os.path.join(out_folder, self.csv_output_name.get())
+        if not os.path.exists(stress_csv):
+            self.log2("Stress CSV not found")
+            return
+
+        stress_df = pd.read_csv(stress_csv)
+        lookup = {}
+        for _, row in stress_df.iterrows():
+            key = (int(row['Subcase']), int(row['Element']))
+            lookup[key] = row['Stress'] if pd.notna(row['Stress']) else 0
+        elements = stress_df['Element'].unique()
+
+        rs_df = self.residual_strength_df
+        cols = rs_df.columns.tolist()
+        comb_col = cols[0]
+
+        comp_cols = []
+        i = 1
+        while i < len(cols) - 1:
+            col_name = str(cols[i]).upper()
+            next_col_name = str(cols[i+1]).upper()
+            if ('CASE' in col_name or 'ID' in col_name) and 'MULT' in next_col_name:
+                comp_cols.append((cols[i], cols[i+1]))
+                i += 2
+            else:
+                i += 1
+
+        results = []
+        for _, rs_row in rs_df.iterrows():
+            comb_lc = rs_row[comb_col]
+            if pd.isna(comb_lc): continue
+            comb_lc = int(comb_lc)
+
+            for eid in elements:
+                total_stress = 0.0
+                components = []
+                for case_col, mult_col in comp_cols:
+                    case_id = rs_row[case_col]
+                    multiplier = rs_row[mult_col]
+                    if pd.isna(case_id) or pd.isna(multiplier): continue
+                    case_id = int(case_id)
+                    multiplier = float(multiplier)
+                    key = (case_id, int(eid))
+                    if key in lookup:
+                        stress = lookup[key]
+                        if stress is not None:
+                            total_stress += stress * multiplier
+                            components.append(f"{case_id}*{multiplier}")
+                if components:
+                    results.append({'Combined_LC': comb_lc, 'Element': eid,
+                        'Combined_Stress': total_stress, 'Components': ' + '.join(components)})
+
+        comb_csv = os.path.join(out_folder, self.combined_csv_name.get())
+        with open(comb_csv, 'w', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=['Combined_LC','Element','Combined_Stress','Components'])
+            w.writeheader()
+            w.writerows(results)
+        self.log2(f"\n  Saved: {comb_csv} ({len(results)} rows)")
+
     # ============= TAB 2 - OFFSET APPLICATION =============
     def browse_tab2_offset_csv(self):
         f = filedialog.askopenfilename(
@@ -1962,7 +1934,7 @@ class IntegratedBDFRFTool:
             messagebox.showerror("Error", "Please select offset CSV file")
             return
         
-        self.btn_apply_offset_tab2.config(state=tk.DISABLED)
+        self.btn2.config(state=tk.DISABLED)
         self.progress2.start()
         threading.Thread(target=self.apply_offsets_tab2, daemon=True).start()
     
@@ -2169,7 +2141,7 @@ class IntegratedBDFRFTool:
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
             self.root.after(0, lambda: [self.progress2.stop(),
-                                       self.btn_apply_offset_tab2.config(state=tk.NORMAL)])
+                                       self.btn2.config(state=tk.NORMAL)])
 
 
     def browse_offset_element_excel(self):
@@ -2193,7 +2165,7 @@ class IntegratedBDFRFTool:
             messagebox.showerror("Error", "Please select output folder")
             return
 
-        self.btn_calc_offset.config(state=tk.DISABLED)
+        self.btn1.config(state=tk.DISABLED)
         self.progress2.start()
         threading.Thread(target=self.calculate_offsets, daemon=True).start()
 
@@ -2429,7 +2401,7 @@ class IntegratedBDFRFTool:
             self.log2(traceback.format_exc())
             self.root.after(0, lambda: messagebox.showerror("Error", str(e)))
         finally:
-            self.root.after(0, lambda: [self.progress2.stop(), self.btn_calc_offset.config(state=tk.NORMAL)])
+            self.root.after(0, lambda: [self.progress2.stop(), self.btn1.config(state=tk.NORMAL)])
 
 
     def start_full_run(self):
@@ -2442,193 +2414,69 @@ class IntegratedBDFRFTool:
     def do_full_run(self):
         try:
             self.log2("="*60)
-            self.log2("FULL RUN (All 4 Steps)")
+            self.log2("FULL RUN (All 5 Steps)")
             self.log2("="*60)
             out_folder = self.run_output_folder.get()
             os.makedirs(out_folder, exist_ok=True)
-            
-            # === STEP 1: Update Properties ===
-            self.log2("\n>>> STEP 1: Update Properties")
-            for bdf_path in self.run_bdfs:
-                self.log2(f"  {os.path.basename(bdf_path)}")
-                out_bdf = self.copy_bdf_to_output(bdf_path, out_folder)
-                stats, _ = self.update_properties_in_file(out_bdf)
-                self.log2(f"    PBARL={stats['pbarl']} PBAR={stats['pbar']} PSHELL={stats['pshell']} PCOMP={stats['pcomp']}")
-            
-            # === STEP 2: Run Nastran ===
+
+            # === STEP 1: Calculate Offsets ===
+            if self.offset_element_excel.get() and self.run_bdfs:
+                self.log2("\n>>> STEP 1: Calculate Offsets")
+                self.calculate_offsets()
+            else:
+                self.log2("\n>>> STEP 1: SKIPPED (No Element Excel selected)")
+
+            # === STEP 2: Apply Offsets ===
+            if self.tab2_offset_csv.get() and self.run_bdfs:
+                self.log2("\n>>> STEP 2: Apply Offsets")
+                self.apply_offsets_tab2()
+            else:
+                self.log2("\n>>> STEP 2: SKIPPED (No Offset CSV)")
+
+            # === STEP 3: Update Properties ===
+            self.log2("\n>>> STEP 3: Update Properties")
+            if self.bar_properties or self.skin_properties:
+                for bdf_path in self.run_bdfs:
+                    self.log2(f"  {os.path.basename(bdf_path)}")
+                    out_bdf = self.copy_bdf_to_output(bdf_path, out_folder)
+                    stats, _ = self.update_properties_in_file(out_bdf)
+                    self.log2(f"    PBARL={stats['pbarl']} PBAR={stats['pbar']} PSHELL={stats['pshell']} PCOMP={stats['pcomp']}")
+            else:
+                self.log2("  SKIPPED (No properties loaded)")
+
+            # === STEP 4: Run Nastran ===
             if self.nastran_path.get():
-                self.log2("\n>>> STEP 2: Run Nastran")
+                self.log2("\n>>> STEP 4: Run Nastran")
                 nastran = self.nastran_path.get()
                 import subprocess
                 import time
-                
+
                 bdf_files_in_output = [f for f in os.listdir(out_folder) if f.lower().endswith(('.bdf','.dat','.nas'))]
-                
+
                 for f in bdf_files_in_output:
                     bdf_full_path = os.path.join(out_folder, f)
                     self.log2(f"  Running: {f}")
-                    
-                    # Nastran'ı çalıştır ve bitene kadar bekle
                     try:
                         cmd = f'"{nastran}" "{bdf_full_path}" out="{out_folder}" scratch=yes batch=no'
                         process = subprocess.Popen(cmd, shell=True)
-                        process.wait()  # Bitene kadar bekle
+                        process.wait()
                         self.log2(f"    Completed: {f}")
                     except Exception as e:
                         self.log2(f"    Error running {f}: {e}")
-                
-                # OP2 dosyalarının oluşmasını bekle
+
                 self.log2("  Waiting for OP2 files...")
                 time.sleep(2)
             else:
-                self.log2("\n>>> STEP 2: SKIPPED (No Nastran path)")
-            
-            # === STEP 3: Post-Process OP2 ===
-            self.log2("\n>>> STEP 3: Post-Process OP2")
-            op2_files = [os.path.join(out_folder, f) for f in os.listdir(out_folder) if f.lower().endswith('.op2')]
-            
-            if op2_files:
-                # Element -> Property mapping ve PBARL dimensions
-                elem_prop = {}
-                pbarl_dims = {}
-                
-                # BDF'lerden oku
-                bdf_files_to_read = list(self.run_bdfs)
-                for f in os.listdir(out_folder):
-                    if f.lower().endswith(('.bdf', '.dat', '.nas')):
-                        bdf_files_to_read.append(os.path.join(out_folder, f))
-                
-                for bdf_path in bdf_files_to_read:
-                    try:
-                        bdf = BDF(debug=False)
-                        bdf.read_bdf(bdf_path, validate=False, xref=False, read_includes=True)
-                        
-                        for eid, el in bdf.elements.items():
-                            if hasattr(el, 'pid'):
-                                elem_prop[eid] = el.pid
-                        
-                        for pid, prop in bdf.properties.items():
-                            prop_type = prop.type
-                            if prop_type == 'PBARL':
-                                dims = prop.dim if hasattr(prop, 'dim') else []
-                                bar_type = prop.bar_type if hasattr(prop, 'bar_type') else 'UNKNOWN'
-                                if len(dims) >= 2:
-                                    pbarl_dims[pid] = {'dim1': dims[0], 'dim2': dims[1], 'type': bar_type}
-                                elif len(dims) == 1:
-                                    pbarl_dims[pid] = {'dim1': dims[0], 'dim2': dims[0], 'type': bar_type}
-                            elif prop_type == 'PBAR':
-                                area = prop.A if hasattr(prop, 'A') else None
-                                if area:
-                                    import math
-                                    side = math.sqrt(area) if area > 0 else 0
-                                    pbarl_dims[pid] = {'dim1': side, 'dim2': side, 'type': 'PBAR', 'area': area}
-                    except:
-                        pass
-                
-                self.log2(f"  Elements: {len(elem_prop)}, Bar properties: {len(pbarl_dims)}")
-                
-                results = []
-                for op2_path in op2_files:
-                    self.log2(f"  Processing: {os.path.basename(op2_path)}")
-                    try:
-                        op2 = OP2(debug=False)
-                        op2.read_op2(op2_path)
-                        if hasattr(op2, 'cbar_force') and op2.cbar_force:
-                            for sc_id, force in op2.cbar_force.items():
-                                for i, eid in enumerate(force.element):
-                                    axial = force.data[0,i,6] if len(force.data.shape)==3 else force.data[i,6]
-                                    pid = elem_prop.get(eid)
-                                    d1 = d2 = area = stress = None
-                                    
-                                    if pid and pid in self.bar_properties:
-                                        d1 = self.bar_properties[pid]['dim1']
-                                        d2 = self.bar_properties[pid]['dim2']
-                                        area = d1 * d2
-                                        if area > 0: stress = axial / area
-                                    elif pid and pid in pbarl_dims:
-                                        prop_info = pbarl_dims[pid]
-                                        d1 = prop_info['dim1']
-                                        d2 = prop_info['dim2']
-                                        area = prop_info.get('area', d1 * d2)
-                                        if area > 0: stress = axial / area
-                                    
-                                    results.append({'OP2': os.path.basename(op2_path), 'Subcase': sc_id, 'Element': eid,
-                                        'Property': pid, 'Axial': axial, 'Dim1': d1, 'Dim2': d2, 'Area': area, 'Stress': stress})
-                    except Exception as e:
-                        self.log2(f"    Error: {e}")
-                
-                csv_path = os.path.join(out_folder, self.csv_output_name.get())
-                with open(csv_path, 'w', newline='') as f:
-                    w = csv.DictWriter(f, fieldnames=['OP2','Subcase','Element','Property','Axial','Dim1','Dim2','Area','Stress'])
-                    w.writeheader()
-                    w.writerows(results)
-                self.log2(f"  Saved: {self.csv_output_name.get()} ({len(results)} rows)")
-            else:
-                self.log2("  No OP2 files found!")
-            
-            # === STEP 4: Combine Stress ===
-            self.log2("\n>>> STEP 4: Combine Stress")
+                self.log2("\n>>> STEP 4: SKIPPED (No Nastran path)")
+
+            # === STEP 5: Post-Process + Combine ===
+            self.log2("\n>>> STEP 5: Post-Process + Combine")
+            self.do_postprocess_inner()
             if self.residual_strength_df is not None:
-                stress_csv = os.path.join(out_folder, self.csv_output_name.get())
-                if os.path.exists(stress_csv):
-                    stress_df = pd.read_csv(stress_csv)
-                    lookup = {}
-                    for _, row in stress_df.iterrows():
-                        key = (int(row['Subcase']), int(row['Element']))
-                        lookup[key] = row['Stress'] if pd.notna(row['Stress']) else 0
-                    elements = stress_df['Element'].unique()
-                    
-                    rs_df = self.residual_strength_df
-                    cols = rs_df.columns.tolist()
-                    comb_col = cols[0]
-                    
-                    comp_cols = []
-                    idx = 1
-                    while idx < len(cols) - 1:
-                        col_name = str(cols[idx]).upper()
-                        next_col_name = str(cols[idx+1]).upper()
-                        if ('CASE' in col_name or 'ID' in col_name) and 'MULT' in next_col_name:
-                            comp_cols.append((cols[idx], cols[idx+1]))
-                            idx += 2
-                        else:
-                            idx += 1
-                    
-                    comb_results = []
-                    for _, rs_row in rs_df.iterrows():
-                        comb_lc = rs_row[comb_col]
-                        if pd.isna(comb_lc): continue
-                        comb_lc = int(comb_lc)
-                        
-                        for eid in elements:
-                            total_stress = 0.0
-                            components = []
-                            for case_col, mult_col in comp_cols:
-                                case_id = rs_row[case_col]
-                                multiplier = rs_row[mult_col]
-                                if pd.isna(case_id) or pd.isna(multiplier): continue
-                                case_id = int(case_id)
-                                multiplier = float(multiplier)
-                                key = (case_id, int(eid))
-                                if key in lookup:
-                                    stress_val = lookup[key]
-                                    if stress_val is not None:
-                                        total_stress += stress_val * multiplier
-                                        components.append(f"{case_id}*{multiplier}")
-                            if components:
-                                comb_results.append({'Combined_LC': comb_lc, 'Element': eid, 
-                                    'Combined_Stress': total_stress, 'Components': ' + '.join(components)})
-                    
-                    comb_csv = os.path.join(out_folder, self.combined_csv_name.get())
-                    with open(comb_csv, 'w', newline='') as f:
-                        w = csv.DictWriter(f, fieldnames=['Combined_LC','Element','Combined_Stress','Components'])
-                        w.writeheader()
-                        w.writerows(comb_results)
-                    self.log2(f"  Saved: {self.combined_csv_name.get()} ({len(comb_results)} rows)")
-                else:
-                    self.log2("  Stress CSV not found!")
+                self.do_combine_stress_inner()
             else:
-                self.log2("  SKIPPED (No Residual Strength data loaded)")
-            
+                self.log2("  Combine SKIPPED (No Residual Strength data)")
+
             self.log2("\n" + "="*60)
             self.log2("FULL RUN COMPLETED!")
             self.log2("="*60)
