@@ -2311,7 +2311,6 @@ class BarPropertySolverTab:
         bdf_btn_frame.pack(side=tk.LEFT, padx=5)
         ttk.Button(bdf_btn_frame, text="Add", command=self.add_bdf).pack(fill=tk.X, pady=1)
         ttk.Button(bdf_btn_frame, text="Remove", command=self.remove_bdf).pack(fill=tk.X, pady=1)
-        ttk.Button(bdf_btn_frame, text="Load All", command=self.load_bdf).pack(fill=tk.X, pady=1)
 
         self.bdf_status = ttk.Label(f1, text="No BDF files loaded", foreground="gray")
         self.bdf_status.pack(anchor=tk.W)
@@ -4058,7 +4057,6 @@ class StructureOptimizationTab:
         bdf_btn_frame.pack(side=tk.LEFT, padx=5)
         ttk.Button(bdf_btn_frame, text="Add", command=self.add_bdf, width=8).pack(pady=1)
         ttk.Button(bdf_btn_frame, text="Remove", command=self.remove_bdf, width=8).pack(pady=1)
-        ttk.Button(bdf_btn_frame, text="Load All", command=self.load_bdf, width=8).pack(pady=1)
 
         self.bdf_status = ttk.Label(f1, text="No BDF files loaded", foreground="gray")
         self.bdf_status.pack(anchor=tk.W)
