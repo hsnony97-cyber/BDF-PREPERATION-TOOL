@@ -2253,6 +2253,7 @@ class BarPropertySolverTab:
         self.current_bar_thicknesses = {} # PID -> thickness
         self.current_skin_thicknesses = {}# PID -> thickness (from BDF, for offsets only)
         self.original_bar_thicknesses = {} # PID -> original dim1 from BDF
+        self.active_group_pids = None      # Set of PIDs for active sweep group (None = all)
         self.material_densities = {}      # MID -> density
         self.prop_to_material = {}        # PID -> MID
         self.element_areas = {}
@@ -2826,7 +2827,11 @@ class BarPropertySolverTab:
             if line.startswith('PBARL'):
                 try:
                     pid = int(line[8:16].strip())
-                    if pid in self.current_bar_thicknesses:
+                    # Only update PIDs in the active group; others stay as original BDF
+                    active_pids = getattr(self, 'active_group_pids', None)
+                    should_update = (pid in self.current_bar_thicknesses and
+                                     (active_pids is None or pid in active_pids))
+                    if should_update:
                         t = self.current_bar_thicknesses[pid]
                         t = max(0.1, t)
                         new_lines.append(line)
@@ -3398,7 +3403,8 @@ class BarPropertySolverTab:
 
                     self.log(f"\n  --- {struct_name}: t = {thickness:.2f} mm ({t_idx + 1}/{len(thicknesses)}) ---")
 
-                    # Set thickness for this group only
+                    # Set thickness for this group only, mark active group
+                    self.active_group_pids = set(pids)
                     for pid in pids:
                         self.current_bar_thicknesses[pid] = thickness
 
@@ -3435,6 +3441,7 @@ class BarPropertySolverTab:
                 self._save_group_summary(group_folder, struct_name, group_results, pids)
 
                 # Reset thicknesses for this group back to original BDF values
+                self.active_group_pids = None
                 for pid in pids:
                     self.current_bar_thicknesses[pid] = self.original_bar_thicknesses.get(pid, bar_min)
 
