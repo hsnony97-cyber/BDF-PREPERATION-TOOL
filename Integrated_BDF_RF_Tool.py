@@ -3942,6 +3942,8 @@ class StructureOptimizationTab:
         self.thickness_step = tk.StringVar(value="0.5")
         self.bar_skin_search_distance = tk.StringVar(value="150.0")  # mm - for proximity-based optimization
         self.use_gfem_thickness = tk.BooleanVar(value=False)  # Use GFEM thickness as initial/min
+        self.keep_bars_constant = tk.BooleanVar(value=False)  # Keep bar thicknesses constant (from Excel)
+        self.keep_skins_constant = tk.BooleanVar(value=False)  # Keep skin thicknesses constant (from Excel)
 
         # Store GFEM thicknesses from Excel (original design values)
         self.gfem_bar_thicknesses = {}  # PID -> thickness from Excel
@@ -4133,6 +4135,20 @@ class StructureOptimizationTab:
         ttk.Checkbutton(row, text="Use GFEM thickness for initial/minimum",
                         variable=self.use_gfem_thickness).pack(side=tk.LEFT)
         ttk.Label(row, text="(Each property uses its Excel thickness as start & min)",
+                  foreground="gray").pack(side=tk.LEFT, padx=10)
+
+        row = ttk.Frame(f2)
+        row.pack(fill=tk.X, pady=3)
+        ttk.Checkbutton(row, text="Keep Bar thicknesses constant (from Excel)",
+                        variable=self.keep_bars_constant).pack(side=tk.LEFT)
+        ttk.Label(row, text="(Bar props stay at Excel values, only skins optimized)",
+                  foreground="gray").pack(side=tk.LEFT, padx=10)
+
+        row = ttk.Frame(f2)
+        row.pack(fill=tk.X, pady=3)
+        ttk.Checkbutton(row, text="Keep Skin thicknesses constant (from Excel)",
+                        variable=self.keep_skins_constant).pack(side=tk.LEFT)
+        ttk.Label(row, text="(Skin props stay at Excel values, only bars optimized)",
                   foreground="gray").pack(side=tk.LEFT, padx=10)
 
         # Section 3: RF Settings
@@ -5033,6 +5049,20 @@ class StructureOptimizationTab:
             return
         if not self.allowable_interp:
             messagebox.showerror("Error", "Load allowable data first")
+            return
+
+        # Validate constant thickness options
+        if self.keep_bars_constant.get() and self.keep_skins_constant.get():
+            messagebox.showerror("Error", "Cannot keep both Bar and Skin thicknesses constant.\n"
+                                "Please select only one or none.")
+            return
+        if self.keep_bars_constant.get() and not self.gfem_bar_thicknesses:
+            messagebox.showerror("Error", "Keep Bar constant requires Excel thickness data.\n"
+                                "Please load Excel data with bar thicknesses first.")
+            return
+        if self.keep_skins_constant.get() and not self.gfem_skin_thicknesses:
+            messagebox.showerror("Error", "Keep Skin constant requires Excel thickness data.\n"
+                                "Please load Excel data with skin thicknesses first.")
             return
 
         self.is_running = True
@@ -6791,6 +6821,8 @@ class StructureOptimizationTab:
             skin_max = float(self.skin_max_thickness.get())
             step = float(self.thickness_step.get())
             use_gfem = self.use_gfem_thickness.get()
+            keep_bars_const = self.keep_bars_constant.get()
+            keep_skins_const = self.keep_skins_constant.get()
 
             # Calculate bar-skin proximity mapping
             self.calculate_bar_skin_proximity()
@@ -6807,11 +6839,17 @@ class StructureOptimizationTab:
                 self.log("(Using Excel thickness as initial and minimum)")
             else:
                 self.log("PHASE 1: Initialize thicknesses at MINIMUM")
+            if keep_bars_const:
+                self.log("*** BAR thicknesses CONSTANT (from Excel) - only skins will be optimized ***")
+            if keep_skins_const:
+                self.log("*** SKIN thicknesses CONSTANT (from Excel) - only bars will be optimized ***")
             self.log("="*50)
 
             # Bar properties: Initialize based on mode
             for pid in self.bar_properties:
-                if use_gfem and pid in self.gfem_bar_thicknesses:
+                if keep_bars_const and pid in self.gfem_bar_thicknesses:
+                    self.current_bar_thicknesses[pid] = self.gfem_bar_thicknesses[pid]
+                elif use_gfem and pid in self.gfem_bar_thicknesses:
                     self.current_bar_thicknesses[pid] = self.gfem_bar_thicknesses[pid]
                 else:
                     self.current_bar_thicknesses[pid] = bar_min
@@ -6825,7 +6863,9 @@ class StructureOptimizationTab:
             related_count = 0
             unrelated_count = 0
             for pid in self.skin_properties:
-                if use_gfem and pid in self.gfem_skin_thicknesses:
+                if keep_skins_const and pid in self.gfem_skin_thicknesses:
+                    init_val = self.gfem_skin_thicknesses[pid]
+                elif use_gfem and pid in self.gfem_skin_thicknesses:
                     init_val = self.gfem_skin_thicknesses[pid]
                 else:
                     init_val = skin_min
@@ -6836,15 +6876,24 @@ class StructureOptimizationTab:
                     self.current_skin_thicknesses[pid] = init_val
                     unrelated_count += 1
 
-            if use_gfem:
+            if keep_bars_const:
+                avg_bar = sum(self.current_bar_thicknesses.values()) / len(self.current_bar_thicknesses) if self.current_bar_thicknesses else 0
+                self.log(f"  Bar thicknesses: {len(self.bar_properties)} properties → CONSTANT (avg: {avg_bar:.2f})")
+            elif use_gfem:
                 avg_bar = sum(self.gfem_bar_thicknesses.values()) / len(self.gfem_bar_thicknesses) if self.gfem_bar_thicknesses else 0
-                avg_skin = sum(self.gfem_skin_thicknesses.values()) / len(self.gfem_skin_thicknesses) if self.gfem_skin_thicknesses else 0
                 self.log(f"  Bar thicknesses: {len(self.bar_properties)} properties → GFEM (avg: {avg_bar:.2f})")
+            else:
+                self.log(f"  Bar thicknesses: {len(self.bar_properties)} properties → MIN ({bar_min})")
+
+            if keep_skins_const:
+                avg_skin = sum(self.current_skin_thicknesses.values()) / len(self.current_skin_thicknesses) if self.current_skin_thicknesses else 0
+                self.log(f"  Skin thicknesses: {len(self.skin_properties)} properties → CONSTANT (avg: {avg_skin:.2f})")
+            elif use_gfem:
+                avg_skin = sum(self.gfem_skin_thicknesses.values()) / len(self.gfem_skin_thicknesses) if self.gfem_skin_thicknesses else 0
                 self.log(f"  Skin thicknesses:")
                 self.log(f"    Related (near bars): {related_count} properties → GFEM (avg: {avg_skin:.2f})")
                 self.log(f"    Unrelated (far): {unrelated_count} properties → GFEM")
             else:
-                self.log(f"  Bar thicknesses: {len(self.bar_properties)} properties → MIN ({bar_min})")
                 self.log(f"  Skin thicknesses:")
                 self.log(f"    Related (near bars): {related_count} properties → MIN ({skin_min})")
                 self.log(f"    Unrelated (far): {unrelated_count} properties → MIN ({skin_min})")
@@ -6944,92 +6993,100 @@ class StructureOptimizationTab:
                 unchanged_count = 0
 
                 # Update BAR thicknesses - each property independently
-                for pid in self.bar_properties:
-                    old_t = self.current_bar_thicknesses[pid]
-                    prop_rf = pid_min_rf.get(pid, None)
+                if keep_bars_const:
+                    self.log(f"    Bars: CONSTANT (locked at Excel values)")
+                else:
+                    for pid in self.bar_properties:
+                        old_t = self.current_bar_thicknesses[pid]
+                        prop_rf = pid_min_rf.get(pid, None)
 
-                    if prop_rf is None:
-                        unchanged_count += 1
-                        continue
+                        if prop_rf is None:
+                            unchanged_count += 1
+                            continue
 
-                    # Stress Ratio Method: new_t = old_t * (target_rf / actual_rf)^alpha
-                    if prop_rf < target_rf - rf_tol:
-                        # Under-designed: INCREASE thickness (primary direction in bottom-up)
-                        ratio = (target_rf / prop_rf) ** alpha
-                        ratio = min(ratio, 1.3)  # Max 30% increase per iteration
-                        new_t = old_t * ratio
-                        increased_count += 1
-                    elif prop_rf > target_rf + rf_tol:
-                        # Over-designed: REDUCE thickness
-                        ratio = (target_rf / prop_rf) ** alpha
-                        ratio = max(ratio, 0.7)  # Max 30% reduction per iteration
-                        new_t = old_t * ratio
-                        decreased_count += 1
-                    else:
-                        # Within tolerance, keep it
-                        new_t = old_t
-                        unchanged_count += 1
+                        # Stress Ratio Method: new_t = old_t * (target_rf / actual_rf)^alpha
+                        if prop_rf < target_rf - rf_tol:
+                            # Under-designed: INCREASE thickness (primary direction in bottom-up)
+                            ratio = (target_rf / prop_rf) ** alpha
+                            ratio = min(ratio, 1.3)  # Max 30% increase per iteration
+                            new_t = old_t * ratio
+                            increased_count += 1
+                        elif prop_rf > target_rf + rf_tol:
+                            # Over-designed: REDUCE thickness
+                            ratio = (target_rf / prop_rf) ** alpha
+                            ratio = max(ratio, 0.7)  # Max 30% reduction per iteration
+                            new_t = old_t * ratio
+                            decreased_count += 1
+                        else:
+                            # Within tolerance, keep it
+                            new_t = old_t
+                            unchanged_count += 1
 
-                    # Use GFEM thickness as minimum if enabled
-                    if use_gfem and pid in self.gfem_bar_thicknesses:
-                        pid_min = self.gfem_bar_thicknesses[pid]
-                    else:
-                        pid_min = bar_min
-                    new_t = max(pid_min, min(bar_max, new_t))
-                    self.current_bar_thicknesses[pid] = new_t
+                        # Use GFEM thickness as minimum if enabled
+                        if use_gfem and pid in self.gfem_bar_thicknesses:
+                            pid_min = self.gfem_bar_thicknesses[pid]
+                        else:
+                            pid_min = bar_min
+                        new_t = max(pid_min, min(bar_max, new_t))
+                        self.current_bar_thicknesses[pid] = new_t
 
                 # Update SKIN thicknesses - PROXIMITY-BASED (coupled optimization)
                 skin_decreased = 0
                 skin_increased = 0
                 skin_unchanged = 0
 
-                # Build: skin_pid -> controlling bar RF (min RF of nearby bars)
-                skin_controlling_rf = {}
-                for bar_pid, nearby_skins in self.bar_to_nearby_skins.items():
-                    bar_rf = pid_min_rf.get(bar_pid, None)
-                    if bar_rf is None:
-                        continue
-                    for skin_pid in nearby_skins:
-                        if skin_pid not in skin_controlling_rf or bar_rf < skin_controlling_rf[skin_pid]:
-                            skin_controlling_rf[skin_pid] = bar_rf
+                if keep_skins_const:
+                    self.log(f"    Skins: CONSTANT (locked at Excel values)")
+                else:
+                    # Build: skin_pid -> controlling bar RF (min RF of nearby bars)
+                    skin_controlling_rf = {}
+                    for bar_pid, nearby_skins in self.bar_to_nearby_skins.items():
+                        bar_rf = pid_min_rf.get(bar_pid, None)
+                        if bar_rf is None:
+                            continue
+                        for skin_pid in nearby_skins:
+                            if skin_pid not in skin_controlling_rf or bar_rf < skin_controlling_rf[skin_pid]:
+                                skin_controlling_rf[skin_pid] = bar_rf
 
-                for skin_pid in self.skin_properties:
-                    old_t = self.current_skin_thicknesses[skin_pid]
+                    for skin_pid in self.skin_properties:
+                        old_t = self.current_skin_thicknesses[skin_pid]
 
-                    controlling_rf = skin_controlling_rf.get(skin_pid, None)
+                        controlling_rf = skin_controlling_rf.get(skin_pid, None)
 
-                    if controlling_rf is None:
-                        # No nearby bars - skin is not coupled, keep at MIN
-                        skin_unchanged += 1
-                        new_t = old_t
-                    elif controlling_rf < target_rf - rf_tol:
-                        # Nearby bars are under-designed: INCREASE skin thickness
-                        skin_ratio = (target_rf / controlling_rf) ** (alpha * 0.7)
-                        skin_ratio = min(skin_ratio, 1.15)  # Max 15% increase
-                        new_t = old_t * skin_ratio
-                        skin_increased += 1
-                    elif controlling_rf > target_rf + rf_tol:
-                        # Nearby bars are over-designed: REDUCE skin thickness
-                        skin_ratio = (target_rf / controlling_rf) ** (alpha * 0.7)
-                        skin_ratio = max(skin_ratio, 0.85)  # Max 15% reduction
-                        new_t = old_t * skin_ratio
-                        skin_decreased += 1
-                    else:
-                        # Within tolerance
-                        new_t = old_t
-                        skin_unchanged += 1
+                        if controlling_rf is None:
+                            # No nearby bars - skin is not coupled, keep at MIN
+                            skin_unchanged += 1
+                            new_t = old_t
+                        elif controlling_rf < target_rf - rf_tol:
+                            # Nearby bars are under-designed: INCREASE skin thickness
+                            skin_ratio = (target_rf / controlling_rf) ** (alpha * 0.7)
+                            skin_ratio = min(skin_ratio, 1.15)  # Max 15% increase
+                            new_t = old_t * skin_ratio
+                            skin_increased += 1
+                        elif controlling_rf > target_rf + rf_tol:
+                            # Nearby bars are over-designed: REDUCE skin thickness
+                            skin_ratio = (target_rf / controlling_rf) ** (alpha * 0.7)
+                            skin_ratio = max(skin_ratio, 0.85)  # Max 15% reduction
+                            new_t = old_t * skin_ratio
+                            skin_decreased += 1
+                        else:
+                            # Within tolerance
+                            new_t = old_t
+                            skin_unchanged += 1
 
-                    # Use GFEM thickness as minimum if enabled
-                    if use_gfem and skin_pid in self.gfem_skin_thicknesses:
-                        spid_min = self.gfem_skin_thicknesses[skin_pid]
-                    else:
-                        spid_min = skin_min
-                    new_t = max(spid_min, min(skin_max, new_t))
-                    self.current_skin_thicknesses[skin_pid] = new_t
+                        # Use GFEM thickness as minimum if enabled
+                        if use_gfem and skin_pid in self.gfem_skin_thicknesses:
+                            spid_min = self.gfem_skin_thicknesses[skin_pid]
+                        else:
+                            spid_min = skin_min
+                        new_t = max(spid_min, min(skin_max, new_t))
+                        self.current_skin_thicknesses[skin_pid] = new_t
 
-                self.log(f"    Bar properties: {increased_count} increased, {decreased_count} decreased, {unchanged_count} unchanged")
-                self.log(f"    Skin properties: {skin_increased} increased, {skin_decreased} decreased, {skin_unchanged} unchanged")
-                self.log(f"    (Skin updated based on nearby bar RF - {len(skin_controlling_rf)} skins coupled)")
+                if not keep_bars_const:
+                    self.log(f"    Bar properties: {increased_count} increased, {decreased_count} decreased, {unchanged_count} unchanged")
+                if not keep_skins_const:
+                    self.log(f"    Skin properties: {skin_increased} increased, {skin_decreased} decreased, {skin_unchanged} unchanged")
+                    self.log(f"    (Skin updated based on nearby bar RF - {len(skin_controlling_rf)} skins coupled)")
 
             # ========== FINAL RESULTS ==========
             self.log("\n" + "="*70)
@@ -7701,6 +7758,8 @@ class StructureOptimizationTab:
             skin_max = float(self.skin_max_thickness.get())
             step = float(self.thickness_step.get())
             use_gfem = self.use_gfem_thickness.get()
+            keep_bars_const = self.keep_bars_constant.get()
+            keep_skins_const = self.keep_skins_constant.get()
 
             # Create output folder
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -7714,27 +7773,44 @@ class StructureOptimizationTab:
                 self.log("(Using Excel thickness as initial and minimum)")
             else:
                 self.log("INITIALIZATION: All properties at MINIMUM")
+            if keep_bars_const:
+                self.log("*** BAR thicknesses CONSTANT (from Excel) - only skins will be optimized ***")
+            if keep_skins_const:
+                self.log("*** SKIN thicknesses CONSTANT (from Excel) - only bars will be optimized ***")
             self.log("="*50)
 
             for pid in self.bar_properties:
-                if use_gfem and pid in self.gfem_bar_thicknesses:
+                if keep_bars_const and pid in self.gfem_bar_thicknesses:
+                    self.current_bar_thicknesses[pid] = self.gfem_bar_thicknesses[pid]
+                elif use_gfem and pid in self.gfem_bar_thicknesses:
                     self.current_bar_thicknesses[pid] = self.gfem_bar_thicknesses[pid]
                 else:
                     self.current_bar_thicknesses[pid] = bar_min
 
             for pid in self.skin_properties:
-                if use_gfem and pid in self.gfem_skin_thicknesses:
+                if keep_skins_const and pid in self.gfem_skin_thicknesses:
+                    self.current_skin_thicknesses[pid] = self.gfem_skin_thicknesses[pid]
+                elif use_gfem and pid in self.gfem_skin_thicknesses:
                     self.current_skin_thicknesses[pid] = self.gfem_skin_thicknesses[pid]
                 else:
                     self.current_skin_thicknesses[pid] = skin_min
 
-            if use_gfem:
+            if keep_bars_const:
+                avg_bar = sum(self.current_bar_thicknesses.values()) / len(self.current_bar_thicknesses) if self.current_bar_thicknesses else 0
+                self.log(f"  Bars: {len(self.bar_properties)} properties -> CONSTANT (avg: {avg_bar:.2f} mm)")
+            elif use_gfem:
                 avg_bar = sum(self.gfem_bar_thicknesses.values()) / len(self.gfem_bar_thicknesses) if self.gfem_bar_thicknesses else 0
-                avg_skin = sum(self.gfem_skin_thicknesses.values()) / len(self.gfem_skin_thicknesses) if self.gfem_skin_thicknesses else 0
                 self.log(f"  Bars: {len(self.bar_properties)} properties -> GFEM (avg: {avg_bar:.2f} mm)")
-                self.log(f"  Skins: {len(self.skin_properties)} properties -> GFEM (avg: {avg_skin:.2f} mm, LOCKED in Phase 1)")
             else:
                 self.log(f"  Bars: {len(self.bar_properties)} properties -> {bar_min} mm")
+
+            if keep_skins_const:
+                avg_skin = sum(self.current_skin_thicknesses.values()) / len(self.current_skin_thicknesses) if self.current_skin_thicknesses else 0
+                self.log(f"  Skins: {len(self.skin_properties)} properties -> CONSTANT (avg: {avg_skin:.2f} mm)")
+            elif use_gfem:
+                avg_skin = sum(self.gfem_skin_thicknesses.values()) / len(self.gfem_skin_thicknesses) if self.gfem_skin_thicknesses else 0
+                self.log(f"  Skins: {len(self.skin_properties)} properties -> GFEM (avg: {avg_skin:.2f} mm, LOCKED in Phase 1)")
+            else:
                 self.log(f"  Skins: {len(self.skin_properties)} properties -> {skin_min} mm (LOCKED in Phase 1)")
 
             # ========== PHASE 1: BAR-ONLY OPTIMIZATION ==========
@@ -7810,47 +7886,54 @@ class StructureOptimizationTab:
                     break
 
                 # Update ONLY BAR thicknesses (skins stay locked)
-                self.log(f"\n  Updating BAR thicknesses only...")
-                bars_increased = 0
-                bars_decreased = 0
-
-                alpha = 0.5  # Stress ratio exponent
-
-                for pid in self.bar_properties:
-                    old_t = self.current_bar_thicknesses[pid]
-                    bar_rf = pid_min_rf.get(pid, None)
-
-                    if bar_rf is None:
-                        continue  # No data for this bar
-
-                    if bar_rf < target_rf - rf_tol:
-                        # Under-designed: INCREASE
-                        ratio = (target_rf / bar_rf) ** alpha
-                        ratio = min(ratio, 1.3)  # Max 30% increase
-                        new_t = old_t * ratio
-                        bars_increased += 1
-                    elif bar_rf > target_rf + rf_tol * 2:
-                        # Over-designed: REDUCE (more conservative)
-                        ratio = (target_rf / bar_rf) ** alpha
-                        ratio = max(ratio, 0.85)  # Max 15% reduction
-                        new_t = old_t * ratio
-                        bars_decreased += 1
-                    else:
-                        new_t = old_t  # Within tolerance
-
-                    # Use GFEM thickness as minimum if enabled
-                    if use_gfem and pid in self.gfem_bar_thicknesses:
-                        pid_min = self.gfem_bar_thicknesses[pid]
-                    else:
-                        pid_min = bar_min
-                    new_t = max(pid_min, min(bar_max, new_t))
-                    self.current_bar_thicknesses[pid] = new_t
-
-                self.log(f"    Bars: {bars_increased} increased, {bars_decreased} decreased")
-                if use_gfem:
-                    self.log(f"    Skins: LOCKED at GFEM values (no changes)")
+                if keep_bars_const:
+                    self.log(f"\n  Bars: CONSTANT (locked at Excel values) - skipping Phase 1 updates")
+                    bars_converged = True
+                    break
                 else:
-                    self.log(f"    Skins: LOCKED at {skin_min} mm (no changes)")
+                    self.log(f"\n  Updating BAR thicknesses only...")
+                    bars_increased = 0
+                    bars_decreased = 0
+
+                    alpha = 0.5  # Stress ratio exponent
+
+                    for pid in self.bar_properties:
+                        old_t = self.current_bar_thicknesses[pid]
+                        bar_rf = pid_min_rf.get(pid, None)
+
+                        if bar_rf is None:
+                            continue  # No data for this bar
+
+                        if bar_rf < target_rf - rf_tol:
+                            # Under-designed: INCREASE
+                            ratio = (target_rf / bar_rf) ** alpha
+                            ratio = min(ratio, 1.3)  # Max 30% increase
+                            new_t = old_t * ratio
+                            bars_increased += 1
+                        elif bar_rf > target_rf + rf_tol * 2:
+                            # Over-designed: REDUCE (more conservative)
+                            ratio = (target_rf / bar_rf) ** alpha
+                            ratio = max(ratio, 0.85)  # Max 15% reduction
+                            new_t = old_t * ratio
+                            bars_decreased += 1
+                        else:
+                            new_t = old_t  # Within tolerance
+
+                        # Use GFEM thickness as minimum if enabled
+                        if use_gfem and pid in self.gfem_bar_thicknesses:
+                            pid_min = self.gfem_bar_thicknesses[pid]
+                        else:
+                            pid_min = bar_min
+                        new_t = max(pid_min, min(bar_max, new_t))
+                        self.current_bar_thicknesses[pid] = new_t
+
+                    self.log(f"    Bars: {bars_increased} increased, {bars_decreased} decreased")
+                    if keep_skins_const:
+                        self.log(f"    Skins: CONSTANT (locked at Excel values)")
+                    elif use_gfem:
+                        self.log(f"    Skins: LOCKED at GFEM values (no changes)")
+                    else:
+                        self.log(f"    Skins: LOCKED at {skin_min} mm (no changes)")
 
             # ========== PHASE 2: SKIN-ONLY OPTIMIZATION (DECOUPLED) ==========
             self.log("\n" + "="*50)
@@ -7942,42 +8025,47 @@ class StructureOptimizationTab:
 
                 # Update ONLY SKIN thicknesses that have their OWN RF failing
                 # KEY DIFFERENCE: We do NOT use nearby bar RF - only skin's own RF
-                self.log(f"\n  Updating SKIN thicknesses (DECOUPLED mode)...")
                 skins_increased = 0
 
-                alpha = 0.5
+                if keep_skins_const:
+                    self.log(f"\n  Skins: CONSTANT (locked at Excel values) - skipping skin updates")
+                    self.log(f"    Bars: LOCKED (no changes in Phase 2)")
+                else:
+                    self.log(f"\n  Updating SKIN thicknesses (DECOUPLED mode)...")
 
-                for pid in self.skin_properties:
-                    old_t = self.current_skin_thicknesses[pid]
-                    skin_rf = pid_min_rf.get(pid, None)
+                    alpha = 0.5
 
-                    # KEY: If skin has no RF data, DO NOT increase it
-                    # This is the DECOUPLED behavior - no guessing from neighbors
-                    if skin_rf is None:
-                        continue  # Skip - no data means we can't judge this skin
+                    for pid in self.skin_properties:
+                        old_t = self.current_skin_thicknesses[pid]
+                        skin_rf = pid_min_rf.get(pid, None)
 
-                    if skin_rf < target_rf - rf_tol:
-                        # Skin's OWN RF is failing: INCREASE
-                        ratio = (target_rf / skin_rf) ** alpha
-                        ratio = min(ratio, 1.25)  # Max 25% increase for skins
-                        new_t = old_t * ratio
-                        skins_increased += 1
-                        # Use GFEM thickness as minimum if enabled
-                        if use_gfem and pid in self.gfem_skin_thicknesses:
-                            spid_min = self.gfem_skin_thicknesses[pid]
-                        else:
-                            spid_min = skin_min
-                        new_t = max(spid_min, min(skin_max, new_t))
-                        self.current_skin_thicknesses[pid] = new_t
-                    # Note: We don't decrease skins here - keep minimum weight
+                        # KEY: If skin has no RF data, DO NOT increase it
+                        # This is the DECOUPLED behavior - no guessing from neighbors
+                        if skin_rf is None:
+                            continue  # Skip - no data means we can't judge this skin
 
-                self.log(f"    Skins increased: {skins_increased} (only those with their OWN RF < {target_rf - rf_tol:.3f})")
-                self.log(f"    Skins skipped: {skins_no_data} (no RF data - NOT increased)")
-                self.log(f"    Bars: LOCKED (no changes in Phase 2)")
+                        if skin_rf < target_rf - rf_tol:
+                            # Skin's OWN RF is failing: INCREASE
+                            ratio = (target_rf / skin_rf) ** alpha
+                            ratio = min(ratio, 1.25)  # Max 25% increase for skins
+                            new_t = old_t * ratio
+                            skins_increased += 1
+                            # Use GFEM thickness as minimum if enabled
+                            if use_gfem and pid in self.gfem_skin_thicknesses:
+                                spid_min = self.gfem_skin_thicknesses[pid]
+                            else:
+                                spid_min = skin_min
+                            new_t = max(spid_min, min(skin_max, new_t))
+                            self.current_skin_thicknesses[pid] = new_t
+                        # Note: We don't decrease skins here - keep minimum weight
+
+                    self.log(f"    Skins increased: {skins_increased} (only those with their OWN RF < {target_rf - rf_tol:.3f})")
+                    self.log(f"    Skins skipped: {skins_no_data} (no RF data - NOT increased)")
+                    self.log(f"    Bars: LOCKED (no changes in Phase 2)")
 
                 # If no skins need updating and we still haven't converged,
                 # the problem might be with bars that need more adjustment
-                if skins_increased == 0 and not skins_converged:
+                if skins_increased == 0 and not skins_converged and not keep_bars_const:
                     self.log(f"\n  Note: No skins updated, but min RF still < target")
                     self.log(f"  This may indicate bars need further adjustment...")
 
@@ -8091,6 +8179,8 @@ class StructureOptimizationTab:
             skin_max = float(self.skin_max_thickness.get())
             step = float(self.thickness_step.get())
             use_gfem = self.use_gfem_thickness.get()
+            keep_bars_const = self.keep_bars_constant.get()
+            keep_skins_const = self.keep_skins_constant.get()
 
             # Calculate bar-skin proximity mapping
             self.calculate_bar_skin_proximity()
@@ -8113,26 +8203,43 @@ class StructureOptimizationTab:
                 self.log("(Using Excel thickness as initial and minimum)")
             else:
                 self.log("INITIALIZATION: All properties at MINIMUM")
+            if keep_bars_const:
+                self.log("*** BAR thicknesses CONSTANT (from Excel) - only skins will be optimized ***")
+            if keep_skins_const:
+                self.log("*** SKIN thicknesses CONSTANT (from Excel) - only bars will be optimized ***")
             self.log("="*50)
 
             for pid in self.bar_properties:
-                if use_gfem and pid in self.gfem_bar_thicknesses:
+                if keep_bars_const and pid in self.gfem_bar_thicknesses:
+                    self.current_bar_thicknesses[pid] = self.gfem_bar_thicknesses[pid]
+                elif use_gfem and pid in self.gfem_bar_thicknesses:
                     self.current_bar_thicknesses[pid] = self.gfem_bar_thicknesses[pid]
                 else:
                     self.current_bar_thicknesses[pid] = bar_min
             for pid in self.skin_properties:
-                if use_gfem and pid in self.gfem_skin_thicknesses:
+                if keep_skins_const and pid in self.gfem_skin_thicknesses:
+                    self.current_skin_thicknesses[pid] = self.gfem_skin_thicknesses[pid]
+                elif use_gfem and pid in self.gfem_skin_thicknesses:
                     self.current_skin_thicknesses[pid] = self.gfem_skin_thicknesses[pid]
                 else:
                     self.current_skin_thicknesses[pid] = skin_min
 
-            if use_gfem:
+            if keep_bars_const:
+                avg_bar = sum(self.current_bar_thicknesses.values()) / len(self.current_bar_thicknesses) if self.current_bar_thicknesses else 0
+                self.log(f"  Bars: {len(self.bar_properties)} properties -> CONSTANT (avg: {avg_bar:.2f} mm)")
+            elif use_gfem:
                 avg_bar = sum(self.gfem_bar_thicknesses.values()) / len(self.gfem_bar_thicknesses) if self.gfem_bar_thicknesses else 0
-                avg_skin = sum(self.gfem_skin_thicknesses.values()) / len(self.gfem_skin_thicknesses) if self.gfem_skin_thicknesses else 0
                 self.log(f"  Bars: {len(self.bar_properties)} properties -> GFEM (avg: {avg_bar:.2f} mm)")
-                self.log(f"  Skins: {len(self.skin_properties)} properties -> GFEM (avg: {avg_skin:.2f} mm)")
             else:
                 self.log(f"  Bars: {len(self.bar_properties)} properties -> {bar_min} mm")
+
+            if keep_skins_const:
+                avg_skin = sum(self.current_skin_thicknesses.values()) / len(self.current_skin_thicknesses) if self.current_skin_thicknesses else 0
+                self.log(f"  Skins: {len(self.skin_properties)} properties -> CONSTANT (avg: {avg_skin:.2f} mm)")
+            elif use_gfem:
+                avg_skin = sum(self.gfem_skin_thicknesses.values()) / len(self.gfem_skin_thicknesses) if self.gfem_skin_thicknesses else 0
+                self.log(f"  Skins: {len(self.skin_properties)} properties -> GFEM (avg: {avg_skin:.2f} mm)")
+            else:
                 self.log(f"  Skins: {len(self.skin_properties)} properties -> {skin_min} mm")
 
             # Get initial baseline
@@ -8319,31 +8426,37 @@ class StructureOptimizationTab:
 
                 # Apply BAR updates
                 bars_updated = 0
-                for pid, delta_t in bar_thickness_increases.items():
-                    old_t = self.current_bar_thicknesses[pid]
-                    # Use GFEM thickness as minimum if enabled
-                    if use_gfem and pid in self.gfem_bar_thicknesses:
-                        pid_min = self.gfem_bar_thicknesses[pid]
-                    else:
-                        pid_min = bar_min
-                    new_t = max(pid_min, min(old_t + delta_t * bar_factor, bar_max))
-                    if new_t > old_t:
-                        self.current_bar_thicknesses[pid] = new_t
-                        bars_updated += 1
+                if keep_bars_const:
+                    self.log(f"\n  Bars: CONSTANT (locked at Excel values) - skipping bar updates")
+                else:
+                    for pid, delta_t in bar_thickness_increases.items():
+                        old_t = self.current_bar_thicknesses[pid]
+                        # Use GFEM thickness as minimum if enabled
+                        if use_gfem and pid in self.gfem_bar_thicknesses:
+                            pid_min = self.gfem_bar_thicknesses[pid]
+                        else:
+                            pid_min = bar_min
+                        new_t = max(pid_min, min(old_t + delta_t * bar_factor, bar_max))
+                        if new_t > old_t:
+                            self.current_bar_thicknesses[pid] = new_t
+                            bars_updated += 1
 
                 # Apply SKIN updates
                 skins_updated = 0
-                for pid, delta_t in skin_thickness_increases.items():
-                    old_t = self.current_skin_thicknesses[pid]
-                    # Use GFEM thickness as minimum if enabled
-                    if use_gfem and pid in self.gfem_skin_thicknesses:
-                        spid_min = self.gfem_skin_thicknesses[pid]
-                    else:
-                        spid_min = skin_min
-                    new_t = max(spid_min, min(old_t + delta_t * skin_factor, skin_max))
-                    if new_t > old_t:
-                        self.current_skin_thicknesses[pid] = new_t
-                        skins_updated += 1
+                if keep_skins_const:
+                    self.log(f"  Skins: CONSTANT (locked at Excel values) - skipping skin updates")
+                else:
+                    for pid, delta_t in skin_thickness_increases.items():
+                        old_t = self.current_skin_thicknesses[pid]
+                        # Use GFEM thickness as minimum if enabled
+                        if use_gfem and pid in self.gfem_skin_thicknesses:
+                            spid_min = self.gfem_skin_thicknesses[pid]
+                        else:
+                            spid_min = skin_min
+                        new_t = max(spid_min, min(old_t + delta_t * skin_factor, skin_max))
+                        if new_t > old_t:
+                            self.current_skin_thicknesses[pid] = new_t
+                            skins_updated += 1
 
                 self.log(f"\n  Applied: {bars_updated} bars updated, {skins_updated} skins updated")
 
