@@ -8479,6 +8479,9 @@ class StructureOptimizationTab:
                 delta_weight = curr_weight - prev_weight
 
                 # Update sensitivity history
+                actual_bar_efficiency = 0
+                actual_skin_efficiency = 0
+
                 if bar_weight_delta > 0 and bars_updated > 0:
                     # Estimate bar's contribution to RF change
                     bar_rf_contribution = delta_rf * (bar_weight_delta / (bar_weight_delta + skin_weight_delta + 1e-9))
